@@ -1,0 +1,15 @@
+.cabal-sandbox*
+cabal.sandbox*
+dist/**
+.idea**
+src/UI/HTTP/cs/bower_components**
+src/UI/HTTP/cs/node_modules**
+src/UI/HTTP/cs/.psci_modules**
+
+
+/.dist-buildwrapper/
+myDatabase/**
+SourceGraph/**
+
+
+.project

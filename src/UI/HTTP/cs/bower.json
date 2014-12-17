@@ -1,0 +1,32 @@
+{
+  "name": "cs",
+  "version": "0.0.0",
+  "authors": [
+    "Eugene Naumenko <eugene.naumenko@gmail.com>"
+  ],
+  "moduleType": [
+    "node"
+  ],
+  "license": "MIT",
+  "private": true,
+   "dependencies": {
+       "purescript-math":                 "*"
+     , "purescript-simple-dom":           "waterson/purescript-simple-dom"
+     , "purescript-xhr":                  "*"
+     , "purescript-rx":                   "*"
+     , "jquery":                          "*"
+     , "rxjs":                            "*"
+     , "rxjs-jquery":                     "*"
+     , "purescript-foreign":              "*"
+     , "purescript-monoid":               "*"
+     , "react":                           "~0.11.0"
+     , "purescript-react":                "joneshf/purescript-react#simplify"
+   },
+  "ignore": [
+      "**/.*"
+    , "node_modules"
+    , "bower_components"
+    , "test"
+    , "tests"
+  ]
+}
