@@ -20,7 +20,7 @@ Twic is a simple reader of a Twitter user's home feed. It's main goal is a searc
 
 - links are resolved and shown as on a Hacker News - just domains;
 
-- extra options and data ae shown on mouse over.
+- extra options and data are shown on mouse over.
 
 All the checks are done automatically in background. User has a very simple workflow - if the single button in user interface is orange, then he/she may click on it and get new tweets. The button becomes grey until next tweets will be available.
 
