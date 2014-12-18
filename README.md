@@ -39,6 +39,7 @@ $ cd twic
 Put *Consumer Key (API Key)*, *Consumer Secret (API Secret)*, *Access Token*, *Access Token Secret* into a `Config.hs` file. Run next commands:
 
 ```
+$ cabal sandbox init
 $ cabal install --only-dependencies
 $ cabal build
 $ cd src/UI/HTTP/cs && npm install && bower install && grunt && cd -
