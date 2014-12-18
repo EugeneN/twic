@@ -14,7 +14,7 @@ Twic is a simple reader of a Twitter user's home feed. It's main goal is a searc
 
 - read tweets are not shown. Once a user reads to the bottom of the feed he/she sees a Refresh button with a count of new, yet unread tweets. After clicking on the button the old, already seen tweets are replaced with new ones.
 
-- The Refresh button is grey if there is no new tweets in a feed, or orange if there are new itwems.
+- The Refresh button is grey if there are no new tweets in a feed, or orange if there are new itwems.
 
 All the checks are done automatically in background. User has a very simple workflow - if the single button in user interface is orange, then he/she may click on it and get new tweets. The button becomes grey until next tweets will be available.
 
