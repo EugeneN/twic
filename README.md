@@ -2,7 +2,7 @@
 
 Twic is a simple reader of a Twitter user's home feed. It's main goal is a search of a better Twitter feed usage experience. Currently it has next features:
 
-- reasonably minamalistic visual appearance, with just a list of tweets and a Refresh button;
+- reasonably minamalistic visual appearance, with just a list of tweets and a Refresh button - a single button application :-)
 
 - every tweet item displays also a minimal set of data - only author's avatar and a tweet text;
 
