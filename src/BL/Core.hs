@@ -31,6 +31,7 @@ import           System.IO
 
 import           Network.HTTP.Conduit
 import qualified Data.ByteString           as B
+import qualified Data.ByteString.Char8     as B8
 
 import           Control.Exception.Lifted  (try)
 
@@ -40,6 +41,7 @@ import           Network.HTTP.Conduit      (HttpException(..))
 import           Network.HTTP.Types        (Status(..))
 import           Control.Monad.Trans       (liftIO)
 
+import qualified Config                    as CFG
 import           BL.Parser                 (parseTweet)
 import           BL.Types
 import qualified BL.DataLayer              as DL
@@ -51,14 +53,13 @@ import           GHC.Generics
 --   errors until you do that.
 
 myoauth :: OAuth
-myoauth = newOAuth { oauthServerName     = "api.twitter.com"
-                   , oauthConsumerKey    = "eewqdXG7YXY5lfqVt6iODGtry"
-                   , oauthConsumerSecret = "orXwvbQXaJowHldeqRFpcaUWtni4ouVS5pbnVhvza2HjRgVMDy"
+myoauth = newOAuth { oauthServerName     = CFG.serverName
+                   , oauthConsumerKey    = B8.pack CFG.oauthConsumerKey
+                   , oauthConsumerSecret = B8.pack CFG.oauthConsumerSecret
                    }
 
 mycred :: Credential
-mycred = newCredential "897203563-212KXPNyJABpTs5ORTpkjqf8TjiX3TQiC3IQK7K0"
-                       "VmDLEQDL9NET61fm27Dy2cNjqaBOtpZ22UIje32twH95H"
+mycred = newCredential (B8.pack CFG.accessToken) (B8.pack CFG.accessTokenSecret)
 
 --   see <https://dev.twitter.com/docs/platform-objects/tweets>.
 instance FromJSON Tweet where
