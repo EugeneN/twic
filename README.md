@@ -40,7 +40,7 @@ $ cabal build
 $ cd src/UI/HTTP/cs && npm install && bower install && grunt && cd -
 $ ./dist/build/twic/twic serve 0
 ```
-Go to http://localhost:3000/
+Go to [http://localhost:3000/](http://localhost:3000/)
 
 # TODO
 
