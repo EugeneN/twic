@@ -24,6 +24,17 @@ Compare with the original Twitter UI:
 
 <img src="res/compare.png" style="width: 600px;"/>
 
+# Run
 
+```
+$ git clone https://github.com/EugeneN/twic.git
+$ cd twic
+$ cabal install --only-dependencies
+$ cabal build
+$ cd src/UI/HTTP/cs && npm install && bower install && grunt && cd -
+$ ./dist/build/twic/twic serve 0
+```
 
+# TODO
 
+A lot.
