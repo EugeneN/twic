@@ -52,13 +52,13 @@ import           GHC.Generics
 
 myoauth :: OAuth
 myoauth = newOAuth { oauthServerName     = "api.twitter.com"
-                   , oauthConsumerKey    = "XM2ba3ezfIcdxwnfPFDVq0OCe"
-                   , oauthConsumerSecret = "vCx4sjUpIcuKBd1B3mOl3KaxTBPNLsQkoxjdHHz1T5Sw3rzPvK"
+                   , oauthConsumerKey    = "eewqdXG7YXY5lfqVt6iODGtry"
+                   , oauthConsumerSecret = "orXwvbQXaJowHldeqRFpcaUWtni4ouVS5pbnVhvza2HjRgVMDy"
                    }
 
 mycred :: Credential
-mycred = newCredential "897203563-fK9WcB2U6cxuAy2TfDpsTA8Cwr0pu3TU3exTAUts"
-                       "9nlkRrflWnAigIWvlKuzzJ8puuBOsLqR6FyKcEvc4IIQg"
+mycred = newCredential "897203563-212KXPNyJABpTs5ORTpkjqf8TjiX3TQiC3IQK7K0"
+                       "VmDLEQDL9NET61fm27Dy2cNjqaBOtpZ22UIje32twH95H"
 
 --   see <https://dev.twitter.com/docs/platform-objects/tweets>.
 instance FromJSON Tweet where
@@ -66,17 +66,19 @@ instance FromJSON Tweet where
     text        <- x .: "text"
     created_at  <- x .: "created_at"
     id_         <- x .: "id"
+    id_str      <- x .: "id_str"
     user        <- x .: "user"
     entities    <- x .: "entities"
 
-    return $ Tweet (parseTweet text) created_at id_ user entities
+    return $ Tweet (parseTweet text) created_at id_ id_str user entities
 
   parseJSON _ = fail "tweet is expected to be an object"
 
 instance ToJSON Tweet where
   toJSON x = object [ "text"       .= text x
                     , "created_at" .= created_at x
-                    , "id"         .= BL.Types.id x
+                    , "id"         .= BL.Types.id_ x
+                    , "id_str"     .= id_str x
                     , "user"       .= user x
                     , "entities"   .= entities x
                     ]
@@ -220,7 +222,7 @@ readApi feed = do
       return (feed, (Left $ ApiError "Http error"))
 
     Right r -> case parseResult of
-      Left msg   ->
+      Left msg ->
         return (feed, (Left $ ApiError msg))
       Right ts ->
         return (feed, Right ts)
@@ -253,8 +255,12 @@ homeTimelineSince tid = HomeTimeline $
   ++ (show tid)
 
 homeTimelineSinceCount :: TweetId -> Int -> Feed
+homeTimelineSinceCount 0 0 = HomeTimeline $
+  "https://api.twitter.com/1.1/statuses/home_timeline.json"
 homeTimelineSinceCount tid 0 = HomeTimeline $
   "https://api.twitter.com/1.1/statuses/home_timeline.json?since_id=" ++ show tid
+homeTimelineSinceCount 0 count = HomeTimeline $
+  "https://api.twitter.com/1.1/statuses/home_timeline.json?count=" ++ show count
 homeTimelineSinceCount tid count = HomeTimeline $
   "https://api.twitter.com/1.1/statuses/home_timeline.json?since_id="
   ++ (show tid) ++ "&count=" ++ (show count)

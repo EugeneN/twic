@@ -31,7 +31,7 @@ class AsHtml a where
     asHtml :: a -> Html
 
 instance AsHtml TweetElement where
-  asHtml (AtUsername u) = H.span ! class_ "username-tag" $ 
+  asHtml (AtUsername u) = H.span ! class_ "username-tag" $
                             H.a ! href (toValue ("https://twitter.com/" ++ u))
                                 ! target "_blank" $ toHtml ("@" ++ u)
 
@@ -42,7 +42,7 @@ instance AsHtml TweetElement where
       chomp = T.unpack . T.takeWhile (\c -> c /= '/') . T.pack
 
   asHtml (PlainText t)  = H.span ! class_ "text-tag" $ H.preEscapedToHtml t -- XXX
-  asHtml (Hashtag h)    = H.span ! class_ "hash-tag" $ 
+  asHtml (Hashtag h)    = H.span ! class_ "hash-tag" $
                             H.a ! href (toValue ("https://twitter.com/hashtag/" ++ h ++ "?src=hash"))
                                 ! target "_blank" $ toHtml ("#" ++ h)
 
@@ -57,9 +57,9 @@ instance AsHtml EntityMedia where
   asHtml _ = ""
 
 instance AsHtml Tweet where
-  asHtml (Tweet body created id_ (Author username authorId screen_name hasAvatar avatarUrl) entities) = do
-    span_ ! class_ "user-name" $ asHtml $ AtUsername (unpack username) 
-    span_ ! class_ "user-icon" $ 
+  asHtml (Tweet body created id_ id_str (Author username authorId screen_name hasAvatar avatarUrl) entities) = do
+    span_ ! class_ "user-name" $ asHtml $ AtUsername (unpack username)
+    span_ ! class_ "user-icon" $
         img ! class_ "user-icon-img" ! src (toValue avatarUrl)
             ! A.alt (toValue username)
             ! A.title (toValue username)
@@ -126,7 +126,7 @@ htmlPage title_ body_ error_ = docTypeHtml $ do
   body $ do
     div_ ! class_ "error" ! A.id "messages" $ case error_ of
                               Nothing -> mempty
-                              Just exp -> div_ ! class_ "error" $ exp 
+                              Just exp -> div_ ! class_ "error" $ exp
 
     div_ ! class_ "container" ! A.id "container" $ do
       case body_ of
@@ -157,7 +157,7 @@ tweetsToHtml (Right ts) = htmlPage title_ body_ err_
   where
     title_ = Just $ toHtml $ (show $ length ts) ++ " new tweets"
     body_ = Just $ case ts of
-             [] -> li ! class_ "no-tweets" $ "No new tweets" 
+             [] -> li ! class_ "no-tweets" $ "No new tweets"
              _  -> forM_ (reverse ts) (li . asHtml)
     err_ = Nothing
 

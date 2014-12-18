@@ -68,19 +68,20 @@ instance asHtmlTweet :: AsHtml Tweet where
     asHtml (Tweet { text = t
                   , created_at = c
                   , id = i
+                  , id_str = s
                   , user = u
                   , entities = e
-                  }) 
-        = tweetComponent {text: t, created_at: c, id: i, author: u, entities: e} []
+                  })
+        = tweetComponent {text: t, created_at: c, id: i, id_str: s, author: u, entities: e} []
 
 instance asHtmlAuthor :: AsHtml Author where
-    asHtml (Author {name = n, profile_image_url = avatar}) 
+    asHtml (Author {name = n, profile_image_url = avatar})
         = D.span {className: "user-icon"} [D.img {className: "user-icon-img", src: avatar, title: n} []]
 
 instance asHtmlEntities :: AsHtml Entities where
     asHtml (Entities { urls = us
                      , hashtags = hs
-                     , media = mms }) 
+                     , media = mms })
         = case mms of
             Just ms -> D.div {className: "media"} (asHtml <$> ms)
             Nothing -> D.div {className: "media"} []
@@ -131,14 +132,14 @@ process (Entities {urls=urls}) (Link u) = case matchUrl u of
 
 process entities x = x
 
-getOrigTweetUrl :: Author -> TweetId -> String
-getOrigTweetUrl (Author {screen_name = screen_name})  tweetId = "https://twitter.com/" ++ screen_name ++ "/status/" ++ show tweetId
+getOrigTweetUrl :: Author -> String -> String
+getOrigTweetUrl (Author {screen_name = screen_name})  tweetId = "https://twitter.com/" ++ screen_name ++ "/status/" ++ tweetId
 
-tweetComponent :: ComponentClass {text :: [TweetElement], created_at :: String, id :: TweetId, author :: Author, entities :: Entities} {}
+tweetComponent :: ComponentClass {text :: [TweetElement], created_at :: String, id :: TweetId, id_str   :: String, author :: Author, entities :: Entities} {}
 tweetComponent = createClass spec { displayName = "Tweet" , render = renderFun }
     where
         renderFun this = pure $
-          D.li {} [ asHtml this.props.author 
+          D.li {} [ asHtml this.props.author
                   , D.span {className: "tweet-body"} (asHtml <<< (process this.props.entities) <$> this.props.text)
 
                   , asHtml this.props.entities
@@ -146,11 +147,14 @@ tweetComponent = createClass spec { displayName = "Tweet" , render = renderFun }
                   , D.span {className: "toolbar-target"} [
                         D.ul {className: "toolbar", id: "menu-" ++ (show this.props.id)} [
                             D.li { "data-tweet-id": (show this.props.id)
+                                 , title: "Retweet"
                                  , onClick: handleRetweetClick (show this.props.id)} [D.rawText "RT"]
-                          , D.li {} [D.a {href: (getOrigTweetUrl this.props.author this.props.id), target: "_blank"} [D.rawText "ORIG"]]
-                          , D.li {} [D.rawText "RE"]
-                          , D.li {} [D.rawText "★"]
-                          , D.li {} [D.rawText "⚑"] ] ] ]
+                          , D.li {} [D.a {href: (getOrigTweetUrl this.props.author this.props.id_str)
+                                         , target: "_blank"
+                                         , title: "View original"} [D.rawText "⌘"]]
+                          , D.li {title: "Replay"} [D.rawText "↩"]
+                          , D.li {title: "Star"} [D.rawText "★"]
+                          , D.li {title: "Mark"} [D.rawText "⚑"] ] ] ]
 
 tweetsList :: ComponentClass {tweets :: [Tweet]} {}
 tweetsList = createClass spec { displayName = "TweetsList", render = renderFun }

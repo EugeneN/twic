@@ -10,6 +10,7 @@ import           Blaze.ByteString.Builder      (Builder, fromByteString)
 import           Text.Blaze.Html.Renderer.Utf8 (renderHtmlBuilder)
 import           Data.ByteString
 import           Data.ByteString.Char8         (readInteger)
+import           Data.Int                      (Int64)
 
 import           UI.HTTP.Json                  (justTweetsToJson, justUnreadCountToJson)
 import           UI.HTTP.Html                  (tweetsToHtml, retweetToHtml, justTweetsToHtml, homePage)
@@ -94,10 +95,10 @@ updateHandler db count request response = response $ responseStream status200 [m
 retweetHandler :: Int -> Application
 retweetHandler count request response = case queryString request of
     [("id", Just id_)] -> do
-        case (readInteger id_) of
+        case readInteger id_ of
           Just (int, str) -> do
             print $ "got retweet " ++ show id_
-            response $ responseStream status200 [mimeHtml] (retweetStream int)
+            response $ responseStream status200 [mimeHtml] (retweetStream (fromIntegral int :: Int64))
 
           Nothing -> do
             print ("bad retweet id" :: String)

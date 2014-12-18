@@ -16,7 +16,7 @@ data Args = Args { action  :: Action
                  } deriving Show
 
 showTweet :: Tweet -> String
-showTweet (Tweet body created id (Author username aid screen_name hasAvatar avatarUrl) _) =
+showTweet (Tweet body created id id_str (Author username aid screen_name hasAvatar avatarUrl) _) =
   "- " ++ (show id) ++ " " ++ (unpack username) ++ ": " ++ (show body)
 
 parseArgs :: IO (Maybe Args)
@@ -39,9 +39,9 @@ printTweets feedName ts = do
     _  -> do
       putStrLn $ (show $ length ts) ++ " new tweets"
       mapM_ (putStrLn . showTweet) ts
-  
+
   putStrLn ""
 
-  where 
+  where
     underline :: String -> String
     underline p = foldl (++) "" (take (length feedName) $ repeat "=")

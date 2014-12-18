@@ -2,15 +2,16 @@
 
 module BL.Types where
 
-import           Data.Text                      (Text)
+import           Data.Text              (Text)
 import           Data.Aeson
 import           GHC.Generics
 import           Control.Applicative
 import           Control.Monad
+import           Data.Int               (Int64)
 
 type Url = String
 type Username = String
-type TweetId = Integer
+type TweetId = Int64
 
 data Feed = UserTimeline Url
           | HomeTimeline Url
@@ -27,7 +28,8 @@ data TweetElement = AtUsername String
 
 data Tweet = Tweet { text       :: [TweetElement]
                    , created_at :: Text
-                   , id         :: TweetId
+                   , id_        :: TweetId
+                   , id_str     :: String
                    , user       :: Author
                    , entities   :: Entities
                    } deriving (Show, Generic)
@@ -85,10 +87,10 @@ data JsonResponse = JsonResponse { okTitle    :: Text
 data ApiError = ApiError String deriving Show
 
 instance Eq Tweet where
-  (Tweet _ _ aid _ _) == (Tweet _ _ bid _ _) = aid == bid
+  (Tweet _ _ aid _ _ _) == (Tweet _ _ bid _ _ _) = aid == bid
 
 instance Ord Tweet where
-   max x@(Tweet _ _ aid _ _) y@(Tweet _ _ bid _ _) = if aid >= bid then x else y
-   (Tweet _ _ aid _ _) <= (Tweet _ _ bid _ _) = aid <= bid
+   max x@(Tweet _ _ aid _ _ _) y@(Tweet _ _ bid _ _ _) = if aid >= bid then x else y
+   (Tweet _ _ aid _ _ _) <= (Tweet _ _ bid _ _ _) = aid <= bid
 
 data JsonUnreadCount = JsonUnreadCount  { unreadCount :: Int } deriving (Show, Generic)

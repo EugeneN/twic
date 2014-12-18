@@ -239,6 +239,9 @@ bodyCss = do
     li # hover ? do
         background red
 
+    a ? do
+      color white
+
 
   ".toolbar" # hover ? do
       display block

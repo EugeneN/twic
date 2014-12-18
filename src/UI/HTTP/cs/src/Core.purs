@@ -69,6 +69,7 @@ instance isForeignAuthor :: IsForeign Author where
 data Tweet = Tweet { text       :: [TweetElement]
                    , created_at :: String
                    , id         :: TweetId
+                   , id_str     :: String
                    , user       :: Author
                    , entities   :: Entities
                    }
@@ -78,12 +79,14 @@ instance isForeignTweet :: IsForeign Tweet where
         t <- readProp "text" x
         c <- readProp "created_at" x
         i <- readProp "id" x
+        s <- readProp "id_str" x
         a <- readProp "user" x
         e <- readProp "entities" x
 
         return $ Tweet { text: t
                        , created_at: c
                        , id: i
+                       , id_str: s
                        , user: a
                        , entities: e
                        }
@@ -102,16 +105,16 @@ data ApiResponse  = ResponseSuccess { okTitle    :: String
 
 instance isForeignResponseError :: IsForeign ApiResponse
     where
-        read data_ = 
+        read data_ =
             case (readProp "errTitle" data_) of
               Left err -> case (readProp "okTitle" data_) of
-                Left err' -> 
+                Left err' ->
                   return $ ResponseError {errTitle: "Other error", errMessage: "Can't parse response 1"}
 
                 Right t' -> do
                   ts <- readProp "okTweets" data_
                   return $ ResponseSuccess {okTitle: t', okTweets: ts}
-              
+
               Right t -> do
                 m <- readProp "errMessage" data_
                 return $ ResponseError {errTitle: t, errMessage: m}
@@ -136,7 +139,7 @@ instance isForeignEntities :: IsForeign Entities where
     h <- "hashtags" `readProp` x
     m <- runNullOrUndefined <$> "media" `readProp` x
 
-    return $ Entities { urls: u, hashtags: h, media: m } 
+    return $ Entities { urls: u, hashtags: h, media: m }
 
 data EntityUrl = EntityUrl { eExpandedUrl :: Url
                            , eUrl         :: Url
@@ -161,7 +164,7 @@ data EntityHashtag = EntityHashtag { hText    :: String
 
 instance isForeignHashtag :: IsForeign EntityHashtag where
   read x = do
-    t <- "text" `readProp` x 
+    t <- "text" `readProp` x
     i <- "indices" `readProp` x
 
     return $ EntityHashtag { hText: t, hIndices: i }

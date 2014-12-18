@@ -13,7 +13,7 @@ getFeedUrl x | x > 0 = homeTimelineSince x
 
 getMaxId :: [Tweet] -> TweetId -> TweetId
 getMaxId [] oldMaxAvailableId = oldMaxAvailableId
-getMaxId ts _ = BL.Types.id $ maximum ts
+getMaxId ts _ = BL.Types.id_ $ maximum ts
 
 
 worker :: MyDb -> Int -> IO ThreadId
