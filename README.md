@@ -8,9 +8,9 @@ Twic is a simple reader of a Twitter user's home feed. It's main goal is a searc
 
 - tweet text is rendered with minimal visual distractions, using only a basic typography;
 
-- tweet's embedded content if any is shown directly, without a need to click on it to expand it;
+- tweet's embedded content if any is shown directly, without a need to click on it to expand;
 
-- older tweets are on the top, older on the bottom, providing a most natural way for reading;
+- older tweets are on the top, newer on the bottom, providing a most natural way for reading;
 
 - read tweets are not shown. Once a user reads to the bottom of the feed he/she sees a Refresh button with a count of new, yet unread tweets. After clicking on the button the old, already seen tweets are replaced with new ones.
 
