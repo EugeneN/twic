@@ -65,18 +65,17 @@ instance asHtmlTweetElement :: AsHtml TweetElement where
     asHtml (Unparsable s)   = D.span {className: "unparsable"} [D.rawText s]
 
 instance asHtmlTweet :: AsHtml Tweet where
-    asHtml (Tweet { text = t
-                  , created_at = c
-                  , id = i
-                  , id_str = s
-                  , user = u
-                  , entities = e
-                  })
-        = tweetComponent {text: t, created_at: c, id: i, id_str: s, author: u, entities: e} []
+    asHtml (Tweet { text = t , created_at = c , id = i , id_str = s , user = u , entities = e , retweet = Nothing }) =
+        tweetComponent {text: t, created_at: c, id: i, id_str: s, author: u, entities: e, retweeted_by: Nothing} []
+
+    asHtml (Tweet { created_at = c , id = i , id_str = s , user = u , retweet = Just (
+            Tweet {text = origText , created_at = origCreatedAt , id = origId , id_str = origIdString, entities = origEntities, user = origAuthor}) }) =
+        tweetComponent {text: origText, created_at: c, id: i, id_str: s, author: u, entities: origEntities, retweeted_by: Just origAuthor} []
+
 
 instance asHtmlAuthor :: AsHtml Author where
-    asHtml (Author {name = n, profile_image_url = avatar})
-        = D.span {className: "user-icon"} [D.img {className: "user-icon-img", src: avatar, title: n} []]
+    asHtml (Author {name = n, screen_name = sn, profile_image_url = avatar})
+        = D.span {className: "user-icon"} [D.a {href: "https://twitter.com/" ++ sn, target: "_blank"} [D.img {className: "user-icon-img", src: avatar, title: n} []]]
 
 instance asHtmlEntities :: AsHtml Entities where
     asHtml (Entities { urls = us
@@ -135,11 +134,24 @@ process entities x = x
 getOrigTweetUrl :: Author -> String -> String
 getOrigTweetUrl (Author {screen_name = screen_name})  tweetId = "https://twitter.com/" ++ screen_name ++ "/status/" ++ tweetId
 
-tweetComponent :: ComponentClass {text :: [TweetElement], created_at :: String, id :: TweetId, id_str   :: String, author :: Author, entities :: Entities} {}
+tweetComponent :: ComponentClass {text :: [TweetElement]
+                                 , created_at :: String
+                                 , id :: TweetId
+                                 , id_str   :: String
+                                 , author :: Author
+                                 , entities :: Entities
+                                 , retweeted_by :: Maybe Author} {}
 tweetComponent = createClass spec { displayName = "Tweet" , render = renderFun }
     where
+        authorToHtml a Nothing = asHtml a
+        authorToHtml (Author {name = name, screen_name = sn, profile_image_url = avatar}) (Just ((Author {name = origName, screen_name = origSn, profile_image_url = origAvatar}))) =
+            D.span {className: "user-icon"} [
+                D.span {className: "user-icon2"} [D.a {href: "https://twitter.com/" ++ origSn, target: "_blank"} [D.img {className: "user-icon-img", src: origAvatar, title: "Original author: " ++ origName} []]]
+              , D.span {className: "user-icon1"} [D.a {href: "https://twitter.com/" ++ sn, target: "_blank"} [D.img {className: "user-icon-img", src: avatar, title: name} []]]
+              ]
+
         renderFun this = pure $
-          D.li {} [ asHtml this.props.author
+          D.li {} [ authorToHtml this.props.author this.props.retweeted_by
                   , D.span {className: "tweet-body"} (asHtml <<< (process this.props.entities) <$> this.props.text)
 
                   , asHtml this.props.entities
@@ -152,9 +164,11 @@ tweetComponent = createClass spec { displayName = "Tweet" , render = renderFun }
                           , D.li {} [D.a {href: (getOrigTweetUrl this.props.author this.props.id_str)
                                          , target: "_blank"
                                          , title: "View original"} [D.rawText "⌘"]]
-                          , D.li {title: "Replay"} [D.rawText "↩"]
+                          , D.li {title: "Reply"} [D.rawText "↩"]
                           , D.li {title: "Star"} [D.rawText "★"]
                           , D.li {title: "Mark"} [D.rawText "⚑"] ] ] ]
+
+
 
 tweetsList :: ComponentClass {tweets :: [Tweet]} {}
 tweetsList = createClass spec { displayName = "TweetsList", render = renderFun }

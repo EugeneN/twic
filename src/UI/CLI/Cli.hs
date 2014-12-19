@@ -16,7 +16,7 @@ data Args = Args { action  :: Action
                  } deriving Show
 
 showTweet :: Tweet -> String
-showTweet (Tweet body created id id_str (Author username aid screen_name hasAvatar avatarUrl) _) =
+showTweet (Tweet body created id id_str (Author username aid screen_name hasAvatar avatarUrl) _ _) =
   "- " ++ (show id) ++ " " ++ (unpack username) ++ ": " ++ (show body)
 
 parseArgs :: IO (Maybe Args)

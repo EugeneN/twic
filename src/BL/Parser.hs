@@ -9,28 +9,28 @@ import           Text.Parsec.Text               (Parser)
 
 
 
-urlAlphabet = ['a'..'z']++['A'..'Z']++['0'..'9']++"$-_.!*'(),;:/?&="
+urlAlphabet = ['a'..'z']++['A'..'Z']++['0'..'9']++"$-_!*'(),;:/?&=."
 
 usernameAlphabet = ['a'..'z']++['A'..'Z']++['0'..'9']++"_"
 
 hashtagAlphabet = ['a'..'z']++['A'..'Z']++['0'..'9']++"_"
 
-whitespace = many $ oneOf " \n\t"
+whitespaces = " \n\t"
 
 username = do
   char '@'
-  u <- try (many1 $ oneOf usernameAlphabet)
+  u <- many1 $ oneOf usernameAlphabet
   return $ AtUsername u
 
 link = do
-  proto <- try (string "http://") <|> try (string "https://")
+  proto <- try (string "http://") <|> string "https://"
   url <- many1 (oneOf urlAlphabet)
   return $ Link $ proto ++ url
 
 
 hashtag = do
   char '#'
-  t <- try (many1 $ oneOf hashtagAlphabet)
+  t <- many1 $ oneOf hashtagAlphabet
   return $ Hashtag t 
 
 retweet = do
@@ -38,18 +38,22 @@ retweet = do
   return Retweet
 
 plaintext = do
-  notFollowedBy link
-  t <- many1 (noneOf " ")
+--  notFollowedBy link
+  t <- many1 (noneOf whitespaces)
 
   return $ PlainText t
 
 spcs = do
-    s <- many1 (oneOf " \n\t")
+    s <- many1 (oneOf whitespaces)
     return $ Spaces s
 
-textOrLink = (try link) <|> plaintext
+hashOrText = try hashtag <|> plaintext
 
-chunk = username <|> hashtag <|> link <|> plaintext <|> spcs
+usernameOrText = try username <|> plaintext
+
+linkOrText = try link <|> plaintext
+
+chunk = try username <|> try hashtag <|> try link <|> plaintext <|> spcs
 
 tweet :: Parser [TweetElement]
 tweet = do

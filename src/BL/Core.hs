@@ -70,8 +70,9 @@ instance FromJSON Tweet where
     id_str      <- x .: "id_str"
     user        <- x .: "user"
     entities    <- x .: "entities"
+    retweet     <- x .:? "retweeted_status"
 
-    return $ Tweet (parseTweet text) created_at id_ id_str user entities
+    return $ Tweet (parseTweet text) created_at id_ id_str user entities retweet
 
   parseJSON _ = fail "tweet is expected to be an object"
 
@@ -82,6 +83,7 @@ instance ToJSON Tweet where
                     , "id_str"     .= id_str x
                     , "user"       .= user x
                     , "entities"   .= entities x
+                    , "retweet"    .= retweet x
                     ]
 
 instance FromJSON JsonApiError

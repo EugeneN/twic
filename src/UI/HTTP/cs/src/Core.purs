@@ -72,6 +72,7 @@ data Tweet = Tweet { text       :: [TweetElement]
                    , id_str     :: String
                    , user       :: Author
                    , entities   :: Entities
+                   , retweet    :: Maybe Tweet
                    }
 
 instance isForeignTweet :: IsForeign Tweet where
@@ -82,6 +83,7 @@ instance isForeignTweet :: IsForeign Tweet where
         s <- readProp "id_str" x
         a <- readProp "user" x
         e <- readProp "entities" x
+        r <- runNullOrUndefined <$> "retweet" `readProp` x
 
         return $ Tweet { text: t
                        , created_at: c
@@ -89,6 +91,7 @@ instance isForeignTweet :: IsForeign Tweet where
                        , id_str: s
                        , user: a
                        , entities: e
+                       , retweet: r
                        }
 
 data ApiResponse  = ResponseSuccess { okTitle    :: String

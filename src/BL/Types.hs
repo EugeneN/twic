@@ -32,6 +32,7 @@ data Tweet = Tweet { text       :: [TweetElement]
                    , id_str     :: String
                    , user       :: Author
                    , entities   :: Entities
+                   , retweet    :: Maybe Tweet
                    } deriving (Show, Generic)
 
 data Entities = Entities { urls     :: [EntityUrl]
@@ -87,10 +88,10 @@ data JsonResponse = JsonResponse { okTitle    :: Text
 data ApiError = ApiError String deriving Show
 
 instance Eq Tweet where
-  (Tweet _ _ aid _ _ _) == (Tweet _ _ bid _ _ _) = aid == bid
+  (Tweet _ _ aid _ _ _ _) == (Tweet _ _ bid _ _ _ _) = aid == bid
 
 instance Ord Tweet where
-   max x@(Tweet _ _ aid _ _ _) y@(Tweet _ _ bid _ _ _) = if aid >= bid then x else y
-   (Tweet _ _ aid _ _ _) <= (Tweet _ _ bid _ _ _) = aid <= bid
+   max x@(Tweet _ _ aid _ _ _ _) y@(Tweet _ _ bid _ _ _ _) = if aid >= bid then x else y
+   (Tweet _ _ aid _ _ _ _) <= (Tweet _ _ bid _ _ _ _) = aid <= bid
 
 data JsonUnreadCount = JsonUnreadCount  { unreadCount :: Int } deriving (Show, Generic)

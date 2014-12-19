@@ -103,6 +103,31 @@ bodyCss = do
     --position relative
     --top (px 7)
 
+  ".user-icon1" ? do
+    display inlineBlock
+    width (px 30)
+    height (px 30)
+    marginTop auto
+    marginBottom auto
+    marginRight (px 20)
+    verticalAlign textTop
+    position absolute
+    left (px (-10))
+
+    ".user-icon-img" ? do
+      borderRight solid (px 1) white
+
+  ".user-icon2" ? do
+    display inlineBlock
+    width (px 30)
+    height (px 30)
+    marginTop auto
+    marginBottom auto
+    marginRight (px 20)
+    verticalAlign textTop
+    position absolute
+    left (px 10)
+
   ".user-icon-img" ? do
     width (px 30)
     height (px 30)
@@ -155,6 +180,7 @@ bodyCss = do
         fontSize (px 20)
         cursor pointer
         boxShadow 0 0 (px 4) (setA 50 baseColor)
+        transition "all" (ms 100) linear (ms 100)
 
     ".no-new-tweets" ? do
         padding (px 4)  (px 4)  (px 4)  (px 4)
@@ -171,6 +197,7 @@ bodyCss = do
         cursor pointer
         boxShadow 0 0 (px 4) (setA 50 baseColor)
         background grey
+        transition "all" (ms 100) linear (ms 100)
 
     ".there-are-new-tweets" # focus ? do
         outline solid (px 0) baseColor

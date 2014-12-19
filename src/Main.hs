@@ -8,13 +8,9 @@ import           UI.CLI.Cli               (parseArgs, Args(..))
 import           UI.HTTP.App              (app)
 import           BL.DataLayer             (openDb, getPrevState)
 import           BL.Worker                (worker)
+import           Config                   (port, delay)
 
-
-oneSecond = 1000000
-oneMinute = 60 * oneSecond
-
-port = 3000
-delay = 2 * oneMinute
+usage = "Usage: <me> serve|dump tweets-count"
 
 --handleAction :: Action -> myDb -> IO
 handleAction "serve" db count = do
@@ -33,7 +29,7 @@ handleAction "dump" db _ = do
              ++ "\nmax available id: " ++ show maxAvailableId
              ++ "\ncount new: " ++ show countNew
 
-handleAction _ _ _ = putStrLn "Usage: <me> serve|dump tweets-count"
+handleAction _ _ _ = putStrLn usage
 
 
 main :: IO ()
@@ -45,5 +41,5 @@ main = do
           db <- openDb
           handleAction action db count
 
-      Nothing -> putStrLn "Usage: <me> serve|dump tweets-count"
+      Nothing -> putStrLn usage
 

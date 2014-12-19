@@ -57,7 +57,7 @@ instance AsHtml EntityMedia where
   asHtml _ = ""
 
 instance AsHtml Tweet where
-  asHtml (Tweet body created id_ id_str (Author username authorId screen_name hasAvatar avatarUrl) entities) = do
+  asHtml (Tweet body created id_ id_str (Author username authorId screen_name hasAvatar avatarUrl) entities retweet) = do
     span_ ! class_ "user-name" $ asHtml $ AtUsername (unpack username)
     span_ ! class_ "user-icon" $
         img ! class_ "user-icon-img" ! src (toValue avatarUrl)
