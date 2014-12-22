@@ -118,6 +118,7 @@ htmlPage title_ body_ error_ = docTypeHtml $ do
     link ! href "http://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic&subset=cyrillic-ext,latin,greek-ext,greek,latin-ext,cyrillic"
          ! rel "stylesheet"
          ! A.type_ "text/css"
+
     case title_ of
       Nothing -> ""
       Just t  -> title $ t
@@ -134,7 +135,7 @@ htmlPage title_ body_ error_ = docTypeHtml $ do
           Just b -> ul ! A.id "feed" $ do b
 
     div_ ! class_ "refresh" ! A.id "refresh" $ do
-      H.button ! class_ "there-are-new-tweets"
+      H.button ! class_ "there-are-new-tweets pop"
                ! A.id "load-new-tweets-id"
                $ ">>="
 

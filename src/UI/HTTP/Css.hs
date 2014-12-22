@@ -281,8 +281,16 @@ bodyCss = do
         color baseColor
         fontStyle italic
 
---    a # hover ? do
---        borderBottom solid (px 1) blue
+  --".pop" ? do
+  --  display inlineBlock
+  --  transform (translateZ 0)
+  --  boxShadow 0 0 (px 1) (setA 50 baseColor)
+
+  --".pop" # hover # focus # active ? do
+  --  animationName "pop"
+  --  animationDuration (ms 300)
+  --  animationTimingFunction linear
+  --  animationIterationCount (iterationCount 1)
 
 
 usernameCss :: Css

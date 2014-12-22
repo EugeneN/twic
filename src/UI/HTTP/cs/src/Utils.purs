@@ -14,6 +14,19 @@ foreign import toString
     \    return a.toString();             \
     \} " :: forall a. a -> String
 
+foreign import readInt
+    """function readInt(a){
+        console.log('readInt:', a);
+        var z = parseInt(a, 10);
+        return z;
+    } """ :: forall a. a -> Number
+
+foreign import isNumeric
+    """function isNumeric(a){
+        return /^[0-9]+$/.test(a)
+    } """ :: String -> Boolean
+
+
 foreign import scrollToTop
     "function scrollToTop() {             \
     \       console.log('scroll to top'); \

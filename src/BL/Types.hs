@@ -13,6 +13,8 @@ type Url = String
 type Username = String
 type TweetId = Int64
 
+data Message = Message Int
+
 data Feed = UserTimeline Url
           | HomeTimeline Url
           deriving Show

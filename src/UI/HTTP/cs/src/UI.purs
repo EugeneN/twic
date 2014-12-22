@@ -52,7 +52,7 @@ instance asHtmlTweetElement :: AsHtml TweetElement where
                 Nothing -> u
                 Just x  -> x
 
-    asHtml (PlainText s)    = D.span {className: "text-tag"} [D.rawText s]
+    asHtml (PlainText s)    = D.span {className: "text-tag", dangerouslySetInnerHTML: {__html: s}} []
 
     asHtml (Hashtag s)      = D.span {className: "hash-tag"} [
                                 D.a {href: ("https://twitter.com/hashtag/" ++ s ++ "?src=hash"), target: "_blank"}
@@ -69,13 +69,16 @@ instance asHtmlTweet :: AsHtml Tweet where
         tweetComponent {text: t, created_at: c, id: i, id_str: s, author: u, entities: e, retweeted_by: Nothing} []
 
     asHtml (Tweet { created_at = c , id = i , id_str = s , user = u , retweet = Just (
-            Tweet {text = origText , created_at = origCreatedAt , id = origId , id_str = origIdString, entities = origEntities, user = origAuthor}) }) =
+            Tweet { text = origText , created_at = origCreatedAt , id = origId
+                  , id_str = origIdString, entities = origEntities, user = origAuthor}) }) =
         tweetComponent {text: origText, created_at: c, id: i, id_str: s, author: u, entities: origEntities, retweeted_by: Just origAuthor} []
 
 
 instance asHtmlAuthor :: AsHtml Author where
     asHtml (Author {name = n, screen_name = sn, profile_image_url = avatar})
-        = D.span {className: "user-icon"} [D.a {href: "https://twitter.com/" ++ sn, target: "_blank"} [D.img {className: "user-icon-img", src: avatar, title: n} []]]
+        = D.span {className: "user-icon"} [
+            D.a {href: "https://twitter.com/" ++ sn, target: "_blank"} [
+                D.img {className: "user-icon-img", src: avatar, title: n} []]]
 
 instance asHtmlEntities :: AsHtml Entities where
     asHtml (Entities { urls = us
@@ -108,13 +111,17 @@ checkButtonComponent = createClass spec { displayName = "CheckButton", render = 
         D.button {className: aClass, id: "load-new-tweets-id"} [D.rawText $ show this.props.count]
         where
             aClass = case this.props.count of
-               0 -> "no-new-tweets"
-               _ -> "there-are-new-tweets"
+               0 -> "no-new-tweets pop"
+               _ -> "there-are-new-tweets pop"
 
-loaderComponent :: ComponentClass {} {}
-loaderComponent = createClass spec { displayName = "Loader", render = renderFun } where
+showLoaderComponent :: ComponentClass {} {}
+showLoaderComponent = createClass spec { displayName = "Loader", render = renderFun } where
                       renderFun this = pure $ D.div {className: "no-tweets"} [
-                        D.img {src: "http://eugenen.github.io/resources/public/img/loading1.gif"} []]
+                                                D.img {src: "http://eugenen.github.io/resources/public/img/loading1.gif"} []]
+
+hideLoaderComponent :: ComponentClass {} {}
+hideLoaderComponent = createClass spec { displayName = "Loader", render = renderFun } where
+                      renderFun this = pure $ D.div {className: "no-tweets"} []
 
 process :: Entities -> TweetElement -> TweetElement
 process (Entities {urls=urls}) (Link u) = case matchUrl u of
@@ -132,7 +139,7 @@ process (Entities {urls=urls}) (Link u) = case matchUrl u of
 process entities x = x
 
 getOrigTweetUrl :: Author -> String -> String
-getOrigTweetUrl (Author {screen_name = screen_name})  tweetId = "https://twitter.com/" ++ screen_name ++ "/status/" ++ tweetId
+getOrigTweetUrl (Author {screen_name = screen_name}) tweetId = "https://twitter.com/" ++ screen_name ++ "/status/" ++ tweetId
 
 tweetComponent :: ComponentClass {text :: [TweetElement]
                                  , created_at :: String
@@ -144,10 +151,15 @@ tweetComponent :: ComponentClass {text :: [TweetElement]
 tweetComponent = createClass spec { displayName = "Tweet" , render = renderFun }
     where
         authorToHtml a Nothing = asHtml a
-        authorToHtml (Author {name = name, screen_name = sn, profile_image_url = avatar}) (Just ((Author {name = origName, screen_name = origSn, profile_image_url = origAvatar}))) =
+        authorToHtml (Author {name = name, screen_name = sn, profile_image_url = avatar})
+                        (Just ((Author {name = origName, screen_name = origSn, profile_image_url = origAvatar}))) =
             D.span {className: "user-icon"} [
-                D.span {className: "user-icon2"} [D.a {href: "https://twitter.com/" ++ origSn, target: "_blank"} [D.img {className: "user-icon-img", src: origAvatar, title: "Original author: " ++ origName} []]]
-              , D.span {className: "user-icon1"} [D.a {href: "https://twitter.com/" ++ sn, target: "_blank"} [D.img {className: "user-icon-img", src: avatar, title: name} []]]
+                D.span {className: "user-icon2"} [
+                    D.a {href: "https://twitter.com/" ++ origSn, target: "_blank"} [
+                        D.img {className: "user-icon-img", src: origAvatar, title: "Original author: " ++ origName} []]]
+              , D.span {className: "user-icon1"} [
+                    D.a {href: "https://twitter.com/" ++ sn, target: "_blank"} [
+                        D.img {className: "user-icon-img", src: avatar, title: name} []]]
               ]
 
         renderFun this = pure $
@@ -183,8 +195,11 @@ renderTweets targetId ts = renderComponentById (tweetsList {tweets: ts} []) targ
 renderMessage :: forall eff. String -> String -> Eff (dom :: DOM, react :: React | eff) Component
 renderMessage targetId m = renderComponentById (messageComponent {message: m} []) targetId
 
-renderLoader :: forall eff. String -> Eff (dom :: DOM, react :: React | eff) Component
-renderLoader targetId = renderComponentById (loaderComponent {} []) targetId
+showLoader :: forall eff. String -> Eff (dom :: DOM, react :: React | eff) Component
+showLoader targetId = renderComponentById (showLoaderComponent {} []) targetId
+
+hideLoader :: forall eff. String -> Eff (dom :: DOM, react :: React | eff) Component
+hideLoader targetId = renderComponentById (hideLoaderComponent {} []) targetId
 
 renderCheckButton :: forall eff. String -> Number -> Eff (dom :: DOM, react :: React | eff) Component
 renderCheckButton targetId count = renderComponentById (checkButtonComponent {count: count} []) targetId

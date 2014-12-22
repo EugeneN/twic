@@ -3,21 +3,33 @@
 module UI.HTTP.App where
 
 import           Control.Monad.IO.Class
-import           Network.Wai                   (responseStream, Application, pathInfo, responseLBS, responseFile, queryString)
+import           Control.Monad                 (forever)
+import           Control.Exception             (fromException, handle)
+import           Control.Concurrent            (MVar, newMVar, modifyMVar_, takeMVar
+                                               , forkIO, threadDelay, killThread, myThreadId)
+import           Network.Wai                   (responseStream, Application, pathInfo
+                                               , responseLBS, responseFile, queryString)
 import           Network.HTTP.Types            (status200, HeaderName)
 import           Network.HTTP.Types.Header     (ResponseHeaders)
+import qualified Network.WebSockets            as WS
+import qualified Network.Wai.Handler.WebSockets as WaiWS
 import           Blaze.ByteString.Builder      (Builder, fromByteString)
 import           Text.Blaze.Html.Renderer.Utf8 (renderHtmlBuilder)
 import           Data.ByteString
 import           Data.ByteString.Char8         (readInteger)
 import           Data.Int                      (Int64)
+import qualified Data.Text                      as T
+import           Data.Text                      (Text)
 
 import           UI.HTTP.Json                  (justTweetsToJson, justUnreadCountToJson)
 import           UI.HTTP.Html                  (tweetsToHtml, retweetToHtml, justTweetsToHtml, homePage)
 import           BL.Core                       (getCachedFeed, readApi, writeApi, retweetUrl, getUnreadCount)
-import           BL.Types                      (TweetId)
+import           BL.Types                      (TweetId, Message(..))
 import           BL.DataLayer                  (MyDb)
+import           Config                        (heartbeatDelay)
 
+--import qualified Network.Wai.Application.Static as Static
+--import Data.FileEmbed (embedDir)
 
 type Filename = String
 
@@ -27,8 +39,8 @@ mimeJs   = ("Content-Type", "text/javascript")
 mimeJSON = ("Content-Type", "application/json")
 mimeIco  = ("Content-Type", "image/x-icon")
 
-app :: MyDb -> Int -> Application -- = Request -> ResourceT IO Response
-app db count request sendResponse = do
+app_ :: MyDb -> Int -> Application -- = Request -> ResourceT IO Response
+app_ db count request sendResponse = do
   print $ pathInfo request
   case pathInfo request of
     []                  -> homeHandler count request sendResponse
@@ -47,6 +59,35 @@ app db count request sendResponse = do
 
     path                -> notFoundHandler count request sendResponse
 
+type Client = (Text, WS.Connection)
+
+app db m count = WaiWS.websocketsOr WS.defaultConnectionOptions
+                                    (wsapp m)
+                                    (app_ db count)
+
+wsapp :: MVar Message -> WS.ServerApp
+wsapp m pending = do
+  conn <- WS.acceptRequest pending
+
+  WS.forkPingThread conn heartbeatDelay
+  pushWsUnreadCount conn (("client" :: Text), conn) m
+
+pushWsUnreadCount :: WS.Connection -> Client -> MVar Message -> IO ()
+pushWsUnreadCount conn client@(user, _) m = handle catchDisconnect $
+  forever $ do
+    Message x <- takeMVar m
+    print $ "->-> sending ws msg " ++ show x
+    WS.sendTextData conn (T.pack $ show x)
+
+    where
+      catchDisconnect e = case fromException e of
+        Just WS.ConnectionClosed -> do
+          print "ws closed by client"
+          return ()
+
+        _ -> do
+          print "ws closed for unknown reason"
+          return ()
 
 homeHandler :: Int -> Application
 homeHandler count request response = response $ responseStream status200 [mimeHtml] (homeStream count)
@@ -80,7 +121,7 @@ updateHandler db count request response = response $ responseStream status200 [m
         justFeedStreamJson db count send flush = do
           feedUrl <- getCachedFeed db count
 
-          print $ "**** read api " ++ (show feedUrl)
+          print $ ">><< read api " ++ (show feedUrl)
           (feed, res) <- readApi feedUrl
 
           case res of
@@ -115,10 +156,3 @@ retweetHandler count request response = case queryString request of
             res <- writeApi $ url
             send $ renderHtmlBuilder $ retweetToHtml res
             flush
-
-
-
-
-
-
-

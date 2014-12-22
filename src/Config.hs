@@ -12,3 +12,5 @@ oneMinute = 60 * oneSecond
 
 port = 3000 :: Int
 delay = 2 * oneMinute
+
+heartbeatDelay = 15 :: Int -- seconds

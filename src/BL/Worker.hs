@@ -16,10 +16,10 @@ getMaxId [] oldMaxAvailableId = oldMaxAvailableId
 getMaxId ts _ = BL.Types.id_ $ maximum ts
 
 
-worker :: MyDb -> Int -> IO ThreadId
-worker db delay = forkIO $ do
+worker :: MyDb -> MVar Message -> Int -> IO ThreadId
+worker db m delay = forkIO $ do
     forever $ do
-        (_, oldMaxAvailableId, _) <- getPrevState db
+        (_, oldMaxAvailableId, oldCountNew) <- getPrevState db
         let feedUrl = getFeedUrl oldMaxAvailableId
 
         print $ "<<<< worker read api " ++ show feedUrl
@@ -33,6 +33,7 @@ worker db delay = forkIO $ do
             Right ts -> do
               print $ ">>>> got new data: newMaxAvailableId " ++ show newMaxAvailableId ++ ", newCountNew " ++ show newCountNew
               saveFeed db newMaxAvailableId newCountNew
+              putMVar m $ Message $ oldCountNew + newCountNew
               where
                 newMaxAvailableId = getMaxId ts oldMaxAvailableId
                 newCountNew = length ts

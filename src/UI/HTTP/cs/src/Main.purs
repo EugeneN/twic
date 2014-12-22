@@ -23,6 +23,8 @@ import Utils
 import Core
 import UI
 
+import qualified Lib.WebSocket as WS
+
 checkButtonContainer = "refresh"
 checkButton = "button"
 
@@ -91,7 +93,7 @@ checkNewTweets = do
 --loadTweets :: forall e. Eff (trace :: Trace, dom :: DOM | e) Unit
 loadTweets = do
     setTitle "Loading..."
-    renderLoader containerId
+    showLoader containerId
     (rioGet url) ~> handleUpdate
 
     pure unit
@@ -105,15 +107,61 @@ loadTweets = do
             ResponseError {errTitle = t, errMessage = m} -> do
                 setTitle t
                 renderMessage messagesId m
+                hideLoader containerId
                 pure unit
 
             ResponseSuccess {okTitle = t', okTweets = ts} -> do
-                setTitle t'
+                setTitle "0 new tweets"
                 renderMessage messagesId ""
                 renderTweets containerId ts
                 renderCheckButton checkButtonContainer 0
                 scrollToTop
                 pure unit
+
+socketUrl = "ws://localhost:3000"
+
+eitherDecode msg = case msg of
+    "ping"            -> Right Heartbeat
+    _ | isNumeric msg -> Right $ UnreadCount $ readInt msg
+    _                 -> Left $ "Unexpected message: " ++ toString msg
+
+data Message = Heartbeat | UnreadCount Number
+
+
+startWsClient = do
+    socket <- WS.mkWebSocket socketUrl
+
+    trace "ws connected"
+
+    WS.onMessage socket onMessage
+    WS.onError   socket onError
+    WS.onClose   socket onClose
+
+    pure unit
+
+    where
+        onMessage msg = case eitherDecode msg of
+            Right (UnreadCount n) -> do
+                setTitle $ show n ++ " new tweets"
+                renderCheckButton checkButtonContainer n
+                pure unit
+
+            Right Heartbeat -> do
+                trace "got ping"
+                pure unit
+
+            Left x -> do
+                trace $ "can't decode ws message: " ++ x
+                pure unit
+
+        onError = do
+            trace $ "ws error"
+            pure unit
+
+        onClose = do
+            trace "ws closed"
+            startWsClient
+            pure unit
 
 main = do
     trace "hello there"
@@ -122,7 +170,9 @@ main = do
 
     loadTweets
 
-    checkNewTweets
+    -- checkNewTweets
+
+    startWsClient
 
     rxTest
 
