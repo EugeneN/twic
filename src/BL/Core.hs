@@ -13,9 +13,11 @@ module BL.Core (
   , JsonApiError(..)
   , JsonResponse(..)
   , TweetId
+  , retweetStatusToTweet
   , homeTimelineSince
   , getUnreadCount
   , getCachedFeed
+  , statusToTweet
   , homeTimeline
   , getHomeFeed
   , retweetUrl
@@ -24,7 +26,7 @@ module BL.Core (
   , saveFeed
   ) where
 
-import           Data.Text                 (Text, pack)
+import           Data.Text                 (Text, pack, unpack)
 
 import           Web.Authenticate.OAuth
 import           System.IO
@@ -47,6 +49,9 @@ import           BL.Types
 import qualified BL.DataLayer              as DL
 import           Data.Aeson
 import           GHC.Generics
+import qualified Web.Twitter.Types         as TT
+import           Data.Int                  (Int64)
+import           Data.HashMap.Strict
 
 -- | Insert here your own credentials. To get them, go to
 --   https://dev.twitter.com/apps and create an application. This code will have runtime
@@ -60,6 +65,59 @@ myoauth = newOAuth { oauthServerName     = CFG.serverName
 
 mycred :: Credential
 mycred = newCredential (B8.pack CFG.accessToken) (B8.pack CFG.accessTokenSecret)
+
+
+retweetStatusToTweet s = Tweet (parseTweet $ TT.rsText s)
+                               (pack $ TT.rsCreatedAt s)
+                               (fromIntegral (TT.rsId s) :: Int64)
+                               (show $ TT.rsId s)
+                               (statusUserToAuthor $ TT.rsUser s)
+                               (statusEntitiesToEntities $ TT.rsEntities s)
+                               (Just $ statusToTweet $ TT.rsRetweetedStatus s)
+
+statusToTweet s = Tweet (parseTweet $ TT.statusText s)
+                        (pack $ TT.statusCreatedAt s)
+                        (fromIntegral (TT.statusId s) :: Int64)
+                        (show $ TT.statusId s)
+                        (statusUserToAuthor $ TT.statusUser s)
+                        (statusEntitiesToEntities $ TT.statusEntities s)
+                        (statusRetweetToRetweet $ TT.statusRetweetedStatus s)
+
+statusUserToAuthor s = Author (TT.userName s)
+                              (TT.userId s)
+                              (TT.userScreenName s)
+                              (TT.userDefaultProfileImage s)
+                              (avatarUrl $ TT.userProfileImageURL s)
+    where
+        avatarUrl x = case x of
+            Nothing -> "http://a0.twimg.com/sticky/default_profile_images/default_profile_6_normal.png"
+            Just y -> unpack y
+
+
+--statusEntitiesToEntities Nothing = ?
+statusEntitiesToEntities (Just s) = BL.Types.Entities (xUrl <$> TT.enURLs s)
+                                                      (xHashtag <$> TT.enHashTags s)
+                                                      (Just $ xMedia <$> TT.enMedia s)
+  where
+    xUrl (TT.Entity x _) = EntityUrl (unpack $ TT.ueExpanded x) (unpack $ TT.ueURL x) [] (unpack $ TT.ueDisplay x)
+    xHashtag (TT.Entity x _) = EntityHashtag (TT.hashTagText x) []
+    xMedia (TT.Entity x _) = EntityMedia (unpack $ TT.meType x)
+                                         []
+                                         (unpack $ TT.ueExpanded $ TT.meURL x)
+                                         (unpack $ TT.meMediaURL x)
+                                         (unpack $ TT.meMediaURL x)
+                                         (unpack $ TT.meMediaURL x)
+                                         (xSizes $ TT.meSizes x)
+    xSizes x = EntityMediaSizes (xSize $ x ! "thumb" )
+                                (xSize $ x ! "large" )
+                                (xSize $ x ! "medium" )
+                                (xSize $ x ! "small" )
+    xSize x = EntityMediaSize (TT.msHeight x) (TT.msWidth x) (unpack $ TT.msResize x)
+
+statusRetweetToRetweet s = case s of
+    Nothing -> Nothing
+    Just s -> Just $ statusToTweet s
+
 
 --   see <https://dev.twitter.com/docs/platform-objects/tweets>.
 instance FromJSON Tweet where
@@ -92,13 +150,13 @@ instance ToJSON JsonApiError
 instance FromJSON JsonResponse
 instance ToJSON JsonResponse
 
-instance FromJSON Entities where
-  parseJSON (Object x) = Entities <$> x .: "urls"
+instance FromJSON BL.Types.Entities where
+  parseJSON (Object x) = BL.Types.Entities <$> x .: "urls"
                                   <*> x .: "hashtags"
                                   <*> x .:? "media"
   parseJSON _ = fail "entities is expected to be an object"
 
-instance ToJSON Entities where
+instance ToJSON BL.Types.Entities where
   toJSON x = object [ "urls"     .= urls x
                     , "hashtags" .= hashtags x
                     , "media"    .= media x
@@ -202,7 +260,7 @@ writeApi url = do
                  httpLbs signedreq m
 
     case res of
-        Left (StatusCodeException (Status code msg) _ _)  ->
+        Left (StatusCodeException (Network.HTTP.Types.Status code msg) _ _)  ->
             return $ Left $ ApiError $ "Twitter API returned bad status code: " ++ show code ++ " " ++ show msg
 
         Right r -> case parseResult of
@@ -219,7 +277,7 @@ readApi feed = do
              httpLbs signedreq m
 
   case res of
-    Left (StatusCodeException (Status code msg) _ _) ->
+    Left (StatusCodeException (Network.HTTP.Types.Status code msg) _ _) ->
       return (feed, (Left $ ApiError $ "Twitter API returned bad status code: " ++ show code ++ " " ++ show msg))
     Left _ ->
       return (feed, (Left $ ApiError "Http error"))

@@ -7,7 +7,7 @@ import           Network.Wai.Handler.Warp (run)
 import           UI.CLI.Cli               (parseArgs, Args(..))
 import           UI.HTTP.App              (app)
 import           BL.DataLayer             (openDb, getPrevState)
-import           BL.Worker                (worker)
+import           BL.Worker                (pollWorker, streamWorker)
 import           BL.Types                 (Message(..))
 import           Config                   (port, delay)
 
@@ -17,8 +17,11 @@ usage = "Usage: <me> serve|dump tweets-count"
 
 --handleAction :: Action -> myDb -> IO
 handleAction "serve" db m count = do
-    putStrLn $ "Starting a worker with delay " ++ show delay
-    workerId <- worker db m delay
+--    putStrLn $ "Starting a pollWorker with delay " ++ show delay
+--    pollWorkerId <- pollWorker db m delay
+
+    putStrLn $ "Starting a streamWorker"
+    streamWorkerId <- streamWorker db m
 
     putStrLn $ "Listening on port " ++ show port
     run port (app db m count)
