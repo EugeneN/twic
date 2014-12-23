@@ -24,9 +24,10 @@ import           Data.Text                      (Text)
 import           UI.HTTP.Json                  (justTweetsToJson, justUnreadCountToJson)
 import           UI.HTTP.Html                  (tweetsToHtml, retweetToHtml, justTweetsToHtml, homePage)
 import           BL.Core                       (getCachedFeed, readApi, writeApi, retweetUrl, getUnreadCount)
-import           BL.Types                      (TweetId, Message(..))
+import           BL.Types                      (TweetId, Message(..), Tweet)
 import           BL.DataLayer                  (MyDb)
 import           Config                        (heartbeatDelay)
+import Data.Aeson (encode)
 
 --import qualified Network.Wai.Application.Static as Static
 --import Data.FileEmbed (embedDir)
@@ -65,19 +66,20 @@ app db m count = WaiWS.websocketsOr WS.defaultConnectionOptions
                                     (wsapp m)
                                     (app_ db count)
 
-wsapp :: MVar Message -> WS.ServerApp
+wsapp :: MVar [Tweet] -> WS.ServerApp
 wsapp m pending = do
   conn <- WS.acceptRequest pending
 
   WS.forkPingThread conn heartbeatDelay
   pushWsUnreadCount conn (("client" :: Text), conn) m
 
-pushWsUnreadCount :: WS.Connection -> Client -> MVar Message -> IO ()
+pushWsUnreadCount :: WS.Connection -> Client -> MVar [Tweet] -> IO ()
 pushWsUnreadCount conn client@(user, _) m = handle catchDisconnect $
   forever $ do
-    Message x <- takeMVar m
-    print $ "->-> sending ws msg " ++ show x
-    WS.sendTextData conn (T.pack $ show x)
+    ts <- takeMVar m
+    print $ "->-> sending ws msg " ++ show ts
+    WS.sendTextData conn (encode ts)
+--    WS.sendTextData conn (T.pack $ show x)
 
     where
       catchDisconnect e = case fromException e of

@@ -8,7 +8,7 @@ import           UI.CLI.Cli               (parseArgs, Args(..))
 import           UI.HTTP.App              (app)
 import           BL.DataLayer             (openDb, getPrevState)
 import           BL.Worker                (pollWorker, streamWorker)
-import           BL.Types                 (Message(..))
+import           BL.Types                 (Message(..), Tweet(..))
 import           Config                   (port, delay)
 
 import           Control.Concurrent       (MVar, newMVar)
@@ -46,7 +46,7 @@ main = do
   case args of
       Just (Args action count) -> do
           db <- openDb
-          m <- newMVar $ Message 0
+          m <- newMVar ([] :: [Tweet])
 
           handleAction action db m count
 

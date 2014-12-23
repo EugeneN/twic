@@ -257,3 +257,8 @@ fromCheckResponse x = case (readJSON x :: F CheckResponse) of
     Left err -> CheckResponse { unreadTitle: "Check failed", unreadCount: -1 }
     Right resp -> resp
 
+fromWsMessage :: String -> [Tweet]
+fromWsMessage s = case (readJSON s :: F [Tweet]) of
+    Left err -> []
+
+    Right ts -> ts

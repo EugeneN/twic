@@ -38,7 +38,7 @@ getMaxId [] oldMaxAvailableId = oldMaxAvailableId
 getMaxId ts _ = BL.Types.id_ $ maximum ts
 
 
-pollWorker :: MyDb -> MVar Message -> Int -> IO ThreadId
+pollWorker :: MyDb -> MVar [Tweet] -> Int -> IO ThreadId
 pollWorker db m delay = forkIO $ do
     forever $ do
         (_, oldMaxAvailableId, oldCountNew) <- getPrevState db
@@ -55,14 +55,14 @@ pollWorker db m delay = forkIO $ do
             Right ts -> do
               print $ ">>>> got new data: newMaxAvailableId " ++ show newMaxAvailableId ++ ", newCountNew " ++ show newCountNew
               BLC.saveFeed db newMaxAvailableId newCountNew
-              putMVar m $ Message $ oldCountNew + newCountNew
+              putMVar m ts
               where
                 newMaxAvailableId = getMaxId ts oldMaxAvailableId
                 newCountNew = length ts
 
         threadDelay delay
 
-streamWorker :: MyDb -> MVar Message -> IO ThreadId
+streamWorker :: MyDb -> MVar [Tweet] -> IO ThreadId
 streamWorker db m = forkIO $ do
   withManager$ \mgr ->do
     src <- stream twInfo mgr userstream
@@ -91,4 +91,5 @@ streamWorker db m = forkIO $ do
 
         (_, oldMaxAvailableId, oldCountNew) <- getPrevState db
         BLC.saveFeed db (getMaxId [t] oldMaxAvailableId) 1
-        putMVar m $ Message (oldCountNew + 1)
+        putMVar m [t]
+--        putMVar m $ Message (oldCountNew + 1)

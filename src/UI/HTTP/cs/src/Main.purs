@@ -2,6 +2,7 @@ module Main where
 
 import Debug.Trace
 import Control.Monad.Eff (Eff(..))
+import Control.Monad.Eff.Ref
 import DOM (DOM(..))
 
 import Data.DOM.Simple.Types (HTMLElement(..))
@@ -13,6 +14,8 @@ import qualified Rx.Observable as Rx
 import qualified Control.Monad.JQuery as J
 import Data.Either
 import Data.Monoid
+import Data.Array (length)
+import React.Types (React())
 
 import qualified Network.XHR as X
 import qualified Network.XHR.Internal as XI
@@ -58,9 +61,9 @@ foreign import byId
     """ :: forall a. String -> a -> Boolean
 
 --startAppBus :: forall e. Eff (trace :: Trace, dom :: DOM | e) Unit
-startAppBus = do
+startAppBus state = do
     bodyClicks <- J.select "body" >>= onAsObservable "click"
-    (filterRx (byId "load-new-tweets-id") bodyClicks) ~> \_ -> loadTweets
+    (filterRx (byId "load-new-tweets-id") bodyClicks) ~> \_ -> loadTweetsFromState state
 
     pure unit
 
@@ -90,6 +93,24 @@ checkNewTweets = do
 
             pure unit
 
+initialState :: [Tweet]
+initialState = []
+
+messagesId = "messages"
+containerId = "container"
+
+loadTweetsFromState state = do
+    ts <- readRef state
+    writeRef state initialState
+
+    setTitle "0 new tweets"
+    renderMessage messagesId ""
+    renderTweets containerId ts
+    renderCheckButton checkButtonContainer 0
+
+    scrollToTop
+    pure unit
+
 --loadTweets :: forall e. Eff (trace :: Trace, dom :: DOM | e) Unit
 loadTweets = do
     setTitle "Loading..."
@@ -100,8 +121,8 @@ loadTweets = do
 
     where
         url = "/update"
-        containerId = "container"
-        messagesId = "messages"
+
+
 
         handleUpdate s = case (fromResponse s) of
             ResponseError {errTitle = t, errMessage = m} -> do
@@ -127,8 +148,13 @@ eitherDecode msg = case msg of
 
 data Message = Heartbeat | UnreadCount Number
 
-
-startWsClient = do
+startWsClient :: forall r.  RefVal [Tweet]
+                         -> Eff ( react :: React
+                                , ws :: WS.WebSocket
+                                , ref :: Ref
+                                , dom :: DOM
+                                , trace :: Trace|r) Unit
+startWsClient state = do
     socket <- WS.mkWebSocket socketUrl
 
     trace "ws connected"
@@ -140,18 +166,21 @@ startWsClient = do
     pure unit
 
     where
-        onMessage msg = case eitherDecode msg of
-            Right (UnreadCount n) -> do
-                setTitle $ show n ++ " new tweets"
-                renderCheckButton checkButtonContainer n
+        onMessage msg = case fromWsMessage msg of
+            ts -> do
+                oldState <- readRef state
+                let
+                    newState = ((oldState ++ ts) :: [Tweet])
+                    newTweetsCount = length newState
+
+                writeRef state newState
+
+                setTitle $ show newTweetsCount ++ " new tweets"
+                renderCheckButton checkButtonContainer newTweetsCount
                 pure unit
 
-            Right Heartbeat -> do
-                trace "got ping"
-                pure unit
-
-            Left x -> do
-                trace $ "can't decode ws message: " ++ x
+            [] -> do
+                trace "got no tweets"
                 pure unit
 
         onError = do
@@ -160,19 +189,22 @@ startWsClient = do
 
         onClose = do
             trace "ws closed"
-            startWsClient
+            startWsClient state
             pure unit
+
 
 main = do
     trace "hello there"
 
-    startAppBus
+    state <- newRef initialState
+
+    startAppBus state
 
     loadTweets
 
     -- checkNewTweets
 
-    startWsClient
+    startWsClient state
 
     rxTest
 
