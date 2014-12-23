@@ -112,7 +112,8 @@ instance isForeignResponseError :: IsForeign ApiResponse
             case (readProp "errTitle" data_) of
               Left err -> case (readProp "okTitle" data_) of
                 Left err' ->
-                  return $ ResponseError {errTitle: "Other error", errMessage: "Can't parse response 1"}
+                  return $ ResponseError { errTitle: "Other error"
+                                         , errMessage: "Can't parse response 1"}
 
                 Right t' -> do
                   ts <- readProp "okTweets" data_

@@ -187,7 +187,7 @@ tweetsList = createClass spec { displayName = "TweetsList", render = renderFun }
     where
         renderFun this = case this.props.tweets of
             [] -> pure $ D.ul {id: "feed"} [D.li { className: "no-tweets" } [D.rawText "No new tweets"]]
-            _  -> pure $ D.ul {id: "feed"} $ asHtml <$> (reverse this.props.tweets)
+            _  -> pure $ D.ul {id: "feed"} $ asHtml <$> this.props.tweets
 
 renderTweets :: forall eff. String -> [Tweet] -> Eff (dom :: DOM, react :: React | eff) Component
 renderTweets targetId ts = renderComponentById (tweetsList {tweets: ts} []) targetId

@@ -14,7 +14,7 @@ import qualified Rx.Observable as Rx
 import qualified Control.Monad.JQuery as J
 import Data.Either
 import Data.Monoid
-import Data.Array (length)
+import Data.Array (length, reverse)
 import React.Types (React())
 
 import qualified Network.XHR as X
@@ -30,6 +30,23 @@ import qualified Lib.WebSocket as WS
 
 checkButtonContainer = "refresh"
 checkButton = "button"
+
+initialState :: [Tweet]
+initialState = []
+
+messagesId = "messages"
+containerId = "container"
+
+updateUrl = "/update"
+checkUrl = "/check"
+socketUrl = "ws://localhost:3000"
+
+data Message = Heartbeat | UnreadCount Number
+
+eitherDecode msg = case msg of
+    "ping"            -> Right Heartbeat
+    _ | isNumeric msg -> Right $ UnreadCount $ readInt msg
+    _                 -> Left $ "Unexpected message: " ++ toString msg
 
 rxTest :: forall e. Eff (trace :: Trace, dom :: DOM | e) Unit
 rxTest = do
@@ -60,20 +77,17 @@ foreign import byId
     }
     """ :: forall a. String -> a -> Boolean
 
---startAppBus :: forall e. Eff (trace :: Trace, dom :: DOM | e) Unit
 startAppBus state = do
     bodyClicks <- J.select "body" >>= onAsObservable "click"
     (filterRx (byId "load-new-tweets-id") bodyClicks) ~> \_ -> loadTweetsFromState state
 
     pure unit
 
---checkNewTweets :: forall e. Eff (trace :: Trace, dom :: DOM | e) Unit
 checkNewTweets = do
     (getIntervalStream oneMinute) ~> checkTweets
     pure unit
 
     where
-        checkUrl = "/check"
         checkTweets _ =  do
             (rioGet checkUrl) ~> handleCheck
             pure unit
@@ -93,12 +107,6 @@ checkNewTweets = do
 
             pure unit
 
-initialState :: [Tweet]
-initialState = []
-
-messagesId = "messages"
-containerId = "container"
-
 loadTweetsFromState state = do
     ts <- readRef state
     writeRef state initialState
@@ -111,19 +119,13 @@ loadTweetsFromState state = do
     scrollToTop
     pure unit
 
---loadTweets :: forall e. Eff (trace :: Trace, dom :: DOM | e) Unit
 loadTweets = do
     setTitle "Loading..."
     showLoader containerId
-    (rioGet url) ~> handleUpdate
-
+    (rioGet updateUrl) ~> handleUpdate
     pure unit
 
     where
-        url = "/update"
-
-
-
         handleUpdate s = case (fromResponse s) of
             ResponseError {errTitle = t, errMessage = m} -> do
                 setTitle t
@@ -134,26 +136,17 @@ loadTweets = do
             ResponseSuccess {okTitle = t', okTweets = ts} -> do
                 setTitle "0 new tweets"
                 renderMessage messagesId ""
-                renderTweets containerId ts
+                renderTweets containerId (reverse ts)
                 renderCheckButton checkButtonContainer 0
                 scrollToTop
                 pure unit
-
-socketUrl = "ws://localhost:3000"
-
-eitherDecode msg = case msg of
-    "ping"            -> Right Heartbeat
-    _ | isNumeric msg -> Right $ UnreadCount $ readInt msg
-    _                 -> Left $ "Unexpected message: " ++ toString msg
-
-data Message = Heartbeat | UnreadCount Number
 
 startWsClient :: forall r.  RefVal [Tweet]
                          -> Eff ( react :: React
                                 , ws :: WS.WebSocket
                                 , ref :: Ref
                                 , dom :: DOM
-                                , trace :: Trace|r) Unit
+                                , trace :: Trace | r) Unit
 startWsClient state = do
     socket <- WS.mkWebSocket socketUrl
 
