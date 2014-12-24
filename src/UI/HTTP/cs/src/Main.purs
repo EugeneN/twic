@@ -101,23 +101,36 @@ checkNewTweets = do
                     pure unit
 
                 CheckResponse { unreadTitle = t, unreadCount = c } -> do
-                    setTitle t
-                    renderCheckButton checkButtonContainer c
-                    pure unit
+                    handleNewTweets c
 
             pure unit
+
+handleError t m = do
+    setTitle t
+    renderMessage messagesId m
+    hideLoader containerId
+    pure unit
+
+handleNewTweets c = do
+    setTitle $ show c ++ case c of
+        1 -> " new tweet"
+        _ -> " new tweets"
+    renderCheckButton checkButtonContainer c
+    pure unit
+
+handleRenderTweets ts = do
+    setTitle "0 new tweets"
+    renderMessage messagesId ""
+    renderTweets containerId ts
+    renderCheckButton checkButtonContainer 0
+    scrollToTop
+    pure unit
 
 loadTweetsFromState state = do
     ts <- readRef state
     writeRef state initialState
 
-    setTitle "0 new tweets"
-    renderMessage messagesId ""
-    renderTweets containerId ts
-    renderCheckButton checkButtonContainer 0
-
-    scrollToTop
-    pure unit
+    handleRenderTweets ts
 
 loadTweets = do
     setTitle "Loading..."
@@ -127,19 +140,11 @@ loadTweets = do
 
     where
         handleUpdate s = case (fromResponse s) of
-            ResponseError {errTitle = t, errMessage = m} -> do
-                setTitle t
-                renderMessage messagesId m
-                hideLoader containerId
-                pure unit
+            ResponseError {errTitle = t, errMessage = m} ->
+                handleError t m
 
             ResponseSuccess {okTitle = t', okTweets = ts} -> do
-                setTitle "0 new tweets"
-                renderMessage messagesId ""
-                renderTweets containerId (reverse ts)
-                renderCheckButton checkButtonContainer 0
-                scrollToTop
-                pure unit
+                handleRenderTweets $ reverse ts
 
 startWsClient :: forall r.  RefVal [Tweet]
                          -> Eff ( react :: React
@@ -167,10 +172,7 @@ startWsClient state = do
                     newTweetsCount = length newState
 
                 writeRef state newState
-
-                setTitle $ show newTweetsCount ++ " new tweets"
-                renderCheckButton checkButtonContainer newTweetsCount
-                pure unit
+                handleNewTweets newTweetsCount
 
             [] -> do
                 trace "got no tweets"

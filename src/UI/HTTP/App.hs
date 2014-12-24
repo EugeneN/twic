@@ -3,10 +3,10 @@
 module UI.HTTP.App where
 
 import           Control.Monad.IO.Class
-import           Control.Monad                 (forever)
+import           Control.Monad                 (forever, forM_)
 import           Control.Exception             (fromException, handle)
-import           Control.Concurrent            (MVar, newMVar, modifyMVar_, takeMVar
-                                               , forkIO, threadDelay, killThread, myThreadId)
+import           Control.Concurrent            (MVar, newMVar, modifyMVar_, takeMVar, modifyMVar, readMVar
+                                               , forkIO, threadDelay, killThread, myThreadId, ThreadId)
 import           Network.Wai                   (responseStream, Application, pathInfo
                                                , responseLBS, responseFile, queryString)
 import           Network.HTTP.Types            (status200, HeaderName)
@@ -17,6 +17,7 @@ import           Blaze.ByteString.Builder      (Builder, fromByteString)
 import           Text.Blaze.Html.Renderer.Utf8 (renderHtmlBuilder)
 import           Data.ByteString
 import           Data.ByteString.Char8         (readInteger)
+import qualified Data.ByteString.Lazy          as BSL
 import           Data.Int                      (Int64)
 import qualified Data.Text                      as T
 import           Data.Text                      (Text)
@@ -27,7 +28,11 @@ import           BL.Core                       (getCachedFeed, readApi, writeApi
 import           BL.Types                      (TweetId, Message(..), Tweet)
 import           BL.DataLayer                  (MyDb)
 import           Config                        (heartbeatDelay)
-import Data.Aeson (encode)
+import           Data.Aeson                    (encode)
+import           Control.Applicative           ((<$>))
+import           Data.Tuple
+import           Data.UUID.V4                  (nextRandom)
+import           Data.UUID                     (UUID)
 
 --import qualified Network.Wai.Application.Static as Static
 --import Data.FileEmbed (embedDir)
@@ -60,36 +65,80 @@ app_ db count request sendResponse = do
 
     path                -> notFoundHandler count request sendResponse
 
-type Client = (Text, WS.Connection)
+type Client = (UUID, WS.Connection)
+type WSState = [Client]
+type FeedState = [Tweet]
 
-app db m count = WaiWS.websocketsOr WS.defaultConnectionOptions
-                                    (wsapp m)
-                                    (app_ db count)
+makeClient :: UUID -> WS.Connection -> Client
+makeClient a c = (a, c)
 
-wsapp :: MVar [Tweet] -> WS.ServerApp
-wsapp m pending = do
+addClient :: Client -> WSState -> WSState
+addClient client clients = client : clients
+
+removeClient :: Client -> WSState -> WSState
+removeClient client = Prelude.filter ((/= fst client) . fst)
+
+broadcast :: BSL.ByteString -> WSState -> IO ()
+broadcast msg clients = do
+    forM_ clients $ \(_, conn) -> WS.sendTextData conn msg
+
+app db m count = do
+    cs <- newMVar ([] :: WSState)
+    startPassWorker m cs
+    return $ WaiWS.websocketsOr WS.defaultConnectionOptions
+                                (wsapp m cs)
+                                (app_ db count)
+
+wsapp :: MVar FeedState -> MVar WSState -> WS.ServerApp
+wsapp m cs pending = do
   conn <- WS.acceptRequest pending
+  clientId <- nextRandom
+  let client = makeClient clientId conn
+
+  print $ "<<-- Incoming ws connection " ++ show clientId
 
   WS.forkPingThread conn heartbeatDelay
-  pushWsUnreadCount conn (("client" :: Text), conn) m
+  modifyMVar_ cs $ \cur -> return $ addClient client cur
+  trackConnection client cs
 
-pushWsUnreadCount :: WS.Connection -> Client -> MVar [Tweet] -> IO ()
-pushWsUnreadCount conn client@(user, _) m = handle catchDisconnect $
+startPassWorker :: MVar FeedState -> MVar WSState -> IO ThreadId
+startPassWorker m cs = forkIO $ do
+    forever $ do
+        ts <- takeMVar m
+        clients <- readMVar cs
+        broadcast (encode ts) clients
+
+trackConnection :: Client -> MVar [Client] -> IO ()
+trackConnection client@(clientId, clientConn) cs = handle catchDisconnect $
   forever $ do
-    ts <- takeMVar m
-    print $ "->-> sending ws msg " ++ show ts
-    WS.sendTextData conn (encode ts)
---    WS.sendTextData conn (T.pack $ show x)
+    x <- WS.receive clientConn
+    print $ "?>?> got smth from client " ++ show clientId ++ ": " ++ show x
 
     where
       catchDisconnect e = case fromException e of
         Just WS.ConnectionClosed -> do
-          print "ws closed by client"
+          print $ "ws ConnectionClosed for " ++ show clientId
+          filterOutClient client cs
           return ()
 
-        _ -> do
-          print "ws closed for unknown reason"
+        Just (WS.CloseRequest a b) -> do
+          print $ "ws CloseRequest from client " ++ show clientId ++ ": " ++ show a ++ "/" ++ show b
+          filterOutClient client cs
           return ()
+
+        Just (WS.ParseException s) -> do
+          print $ "ws ParseException for " ++ show clientId ++ ": " ++ s
+          filterOutClient client cs
+          return ()
+
+        x -> do
+          print $ "ws closed for unknown reason for " ++ show clientId ++ ": " ++ show x
+          filterOutClient client cs
+          return ()
+
+      filterOutClient client cs = do
+        modifyMVar_ cs $ \clients ->
+            return $ removeClient client clients
 
 homeHandler :: Int -> Application
 homeHandler count request response = response $ responseStream status200 [mimeHtml] (homeStream count)

@@ -24,7 +24,9 @@ handleAction "serve" db m count = do
     streamWorkerId <- streamWorker db m
 
     putStrLn $ "Listening on port " ++ show port
-    run port (app db m count)
+    app_ <- app db m count
+
+    run port app_
 
 handleAction "dump" db m _ = do
     putStrLn $ "Store dump:"

@@ -24,7 +24,7 @@ import Network.HTTP.Conduit as HTTP
 import Web.Authenticate.OAuth
 import qualified Data.ByteString.Char8 as BS
 
-import qualified BL.Core as BLC --       (saveFeed, getHomeFeed, readApi, homeTimelineSince, homeTimeline)
+import qualified BL.Core as BLC
 import BL.DataLayer  (MyDb, getPrevState)
 import BL.Types
 import qualified Config as CFG
@@ -53,7 +53,9 @@ pollWorker db m delay = forkIO $ do
               print $ show err
 
             Right ts -> do
-              print $ ">>>> got new data: newMaxAvailableId " ++ show newMaxAvailableId ++ ", newCountNew " ++ show newCountNew
+              print $ ">>>> got new data: newMaxAvailableId "
+                      ++ show newMaxAvailableId
+                      ++ ", newCountNew " ++ show newCountNew
               BLC.saveFeed db newMaxAvailableId newCountNew
               putMVar m ts
               where
@@ -87,9 +89,8 @@ streamWorker db m = forkIO $ do
     handleTL s = print $ "???? got not a tweet " ++ show s
 
     handleTweet t = do
-        print $ "!!!! got tweet " ++ show t
+        print $ "!>!> got tweet from streaming api " ++ show t
 
         (_, oldMaxAvailableId, oldCountNew) <- getPrevState db
         BLC.saveFeed db (getMaxId [t] oldMaxAvailableId) 1
         putMVar m [t]
---        putMVar m $ Message (oldCountNew + 1)

@@ -1,9 +1,11 @@
 :m src/Core.purs
+:m src/Lib/WebSocket.purs
 :m src/Main.purs
 :m src/Types.purs
 :m src/UI.purs
 :m src/Utils.purs
 :m bower_components/purescript-arrays/src/Data/Array.purs
+:m bower_components/purescript-arrays/src/Data/Array/ST.purs
 :m bower_components/purescript-arrays/src/Data/Array/Unsafe.purs
 :m bower_components/purescript-control/src/Control/Alt.purs
 :m bower_components/purescript-control/src/Control/Alternative.purs
@@ -47,9 +49,6 @@
 :m bower_components/purescript-refs/src/Control/Monad/Eff/Ref/Unsafe.purs
 :m bower_components/purescript-rx/src/Rx/JQuery.purs
 :m bower_components/purescript-rx/src/Rx/Observable.purs
-:m bower_components/purescript-signal/src/Signal.purs
-:m bower_components/purescript-signal/src/Signal/DOM.purs
-:m bower_components/purescript-signal/src/Signal/Time.purs
 :m bower_components/purescript-simple-dom/src/Data/DOM/Simple/Ajax.purs
 :m bower_components/purescript-simple-dom/src/Data/DOM/Simple/Document.purs
 :m bower_components/purescript-simple-dom/src/Data/DOM/Simple/Element.purs
@@ -66,7 +65,6 @@
 :m bower_components/purescript-simple-dom/src/Data/DOM/Simple/Window.purs
 :m bower_components/purescript-strings/src/Data/String.purs
 :m bower_components/purescript-strings/src/Data/String/Regex.purs
-:m bower_components/purescript-timers/src/Control/Timer.purs
 :m bower_components/purescript-tuples/src/Data/Tuple.purs
 :m bower_components/purescript-xhr/src/Network/XHR.purs
 :m bower_components/purescript-xhr/src/Network/XHR/Internal.purs
