@@ -37,7 +37,10 @@ import           Data.UUID                     (UUID)
 --import qualified Network.Wai.Application.Static as Static
 --import Data.FileEmbed (embedDir)
 
-type Filename = String
+type Filename  = String
+type Client    = (UUID, WS.Connection)
+type WSState   = [Client]
+type FeedState = [Tweet]
 
 mimeHtml = ("Content-Type", "text/html")
 mimeText = ("Content-Type", "text/plain")
@@ -45,8 +48,8 @@ mimeJs   = ("Content-Type", "text/javascript")
 mimeJSON = ("Content-Type", "application/json")
 mimeIco  = ("Content-Type", "image/x-icon")
 
-app_ :: MyDb -> Int -> Application -- = Request -> ResourceT IO Response
-app_ db count request sendResponse = do
+httpapp :: MyDb -> Int -> Application -- = Request -> ResourceT IO Response
+httpapp db count request sendResponse = do
   print $ pathInfo request
   case pathInfo request of
     []                  -> homeHandler count request sendResponse
@@ -65,10 +68,6 @@ app_ db count request sendResponse = do
 
     path                -> notFoundHandler count request sendResponse
 
-type Client = (UUID, WS.Connection)
-type WSState = [Client]
-type FeedState = [Tweet]
-
 makeClient :: UUID -> WS.Connection -> Client
 makeClient a c = (a, c)
 
@@ -79,15 +78,14 @@ removeClient :: Client -> WSState -> WSState
 removeClient client = Prelude.filter ((/= fst client) . fst)
 
 broadcast :: BSL.ByteString -> WSState -> IO ()
-broadcast msg clients = do
-    forM_ clients $ \(_, conn) -> WS.sendTextData conn msg
+broadcast msg clients = forM_ clients $ \(_, conn) -> WS.sendTextData conn msg
 
 app db m count = do
     cs <- newMVar ([] :: WSState)
-    startPassWorker m cs
+    startBroadcastWorker m cs
     return $ WaiWS.websocketsOr WS.defaultConnectionOptions
                                 (wsapp m cs)
-                                (app_ db count)
+                                (httpapp db count)
 
 wsapp :: MVar FeedState -> MVar WSState -> WS.ServerApp
 wsapp m cs pending = do
@@ -95,14 +93,14 @@ wsapp m cs pending = do
   clientId <- nextRandom
   let client = makeClient clientId conn
 
-  print $ "<<-- Incoming ws connection " ++ show clientId
+  print $ "<<~~ Incoming ws connection " ++ show clientId
 
   WS.forkPingThread conn heartbeatDelay
   modifyMVar_ cs $ \cur -> return $ addClient client cur
   trackConnection client cs
 
-startPassWorker :: MVar FeedState -> MVar WSState -> IO ThreadId
-startPassWorker m cs = forkIO $ do
+startBroadcastWorker :: MVar FeedState -> MVar WSState -> IO ThreadId
+startBroadcastWorker m cs = forkIO $
     forever $ do
         ts <- takeMVar m
         clients <- readMVar cs
@@ -112,7 +110,7 @@ trackConnection :: Client -> MVar [Client] -> IO ()
 trackConnection client@(clientId, clientConn) cs = handle catchDisconnect $
   forever $ do
     x <- WS.receive clientConn
-    print $ "?>?> got smth from client " ++ show clientId ++ ": " ++ show x
+    print $ "?>?> got smth from ws client " ++ show clientId ++ ": " ++ show x
 
     where
       catchDisconnect e = case fromException e of
@@ -136,7 +134,7 @@ trackConnection client@(clientId, clientConn) cs = handle catchDisconnect $
           filterOutClient client cs
           return ()
 
-      filterOutClient client cs = do
+      filterOutClient client cs =
         modifyMVar_ cs $ \clients ->
             return $ removeClient client clients
 
@@ -160,8 +158,6 @@ checkHandler db count request response = response $ responseStream status200 [mi
          justCheckStreamJson :: MyDb -> Int -> (Builder -> IO ()) -> IO () -> IO ()
          justCheckStreamJson db count send flush = do
              unreadCount <- getUnreadCount db
-             print $ "**** check unread count " ++ (show unreadCount)
-
              send $ justUnreadCountToJson unreadCount
              flush
 
@@ -171,23 +167,17 @@ updateHandler db count request response = response $ responseStream status200 [m
         justFeedStreamJson :: MyDb -> Int -> (Builder -> IO ()) -> IO () -> IO ()
         justFeedStreamJson db count send flush = do
           feedUrl <- getCachedFeed db count
-
-          print $ ">><< read api " ++ (show feedUrl)
           (feed, res) <- readApi feedUrl
 
           case res of
-            Left err ->
-              send $ justTweetsToJson $ Left err
-
-            Right ts -> do
-              send $ justTweetsToJson $ Right ts
+            Left err -> send $ justTweetsToJson $ Left err
+            Right ts -> send $ justTweetsToJson $ Right ts
 
           flush
 
 retweetHandler :: Int -> Application
 retweetHandler count request response = case queryString request of
-    [("id", Just id_)] -> do
-        case readInteger id_ of
+    [("id", Just id_)] -> case readInteger id_ of
           Just (int, str) -> do
             print $ "got retweet " ++ show id_
             response $ responseStream status200 [mimeHtml] (retweetStream (fromIntegral int :: Int64))
@@ -201,9 +191,4 @@ retweetHandler count request response = case queryString request of
 
     where
         retweetStream :: TweetId -> (Builder -> IO ()) -> IO () -> IO ()
-        retweetStream id_ send flush = do
-            let url = retweetUrl id_
-            print $ ">>>>" ++ url ++ "<<<<"
-            res <- writeApi $ url
-            send $ renderHtmlBuilder $ retweetToHtml res
-            flush
+        retweetStream id_ send flush = writeApi (retweetUrl id_) >>= send . renderHtmlBuilder . retweetToHtml >> flush

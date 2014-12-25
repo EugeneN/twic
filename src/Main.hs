@@ -15,7 +15,6 @@ import           Control.Concurrent       (MVar, newMVar)
 
 usage = "Usage: <me> serve|dump tweets-count"
 
---handleAction :: Action -> myDb -> IO
 handleAction "serve" db m count = do
 --    putStrLn $ "Starting a pollWorker with delay " ++ show delay
 --    pollWorkerId <- pollWorker db m delay

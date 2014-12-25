@@ -51,20 +51,13 @@ $(makeAcidic ''Database ['updateStore, 'viewStore, 'justView])
 type MyDb = AcidState Database
 
 openDb :: IO MyDb
-openDb = do
-  db <- openLocalStateFrom "myDatabase/" (Database $ Store 0 0 0)
-  return db
+openDb = openLocalStateFrom "myDatabase/" (Database $ Store 0 0 0)
 
 write :: MyDb -> TweetId -> Int -> IO (EventResult UpdateStore)
-write db x y = do
-  update db (UpdateStore x y)
+write db tid count = update db (UpdateStore tid count)
 
 read :: MyDb -> Int -> IO (TweetId, Int)
-read db limit = do
-  t <- update db (ViewStore limit)
-  return t
+read db limit = update db (ViewStore limit)
 
 getPrevState :: MyDb -> IO (TweetId, TweetId, Int)
-getPrevState db = do
-   x <- query db JustView
-   return x
+getPrevState db = query db JustView

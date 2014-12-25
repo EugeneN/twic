@@ -16,8 +16,10 @@ import           Blaze.ByteString.Builder            (Builder)
 justTweetsToJson :: Either ApiError [Tweet] -> Builder
 justTweetsToJson (Left (ApiError msg)) =
     fromLazyByteString $ encode $ JsonApiError {errTitle = "Error", errMessage = T.pack msg}
+
 justTweetsToJson (Right []) =
     fromLazyByteString $ encode $ JsonResponse {okTweets = [], okTitle = "No new tweets"}
+
 justTweetsToJson (Right ts) =
     fromLazyByteString $ encode $ JsonResponse {okTweets = ts, okTitle = T.pack $ (show $ length ts) ++ " new tweets"}
 

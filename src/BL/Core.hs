@@ -16,14 +16,16 @@ module BL.Core (
   , retweetStatusToTweet
   , homeTimelineSince
   , getUnreadCount
+  , saveFeedStatus
   , getCachedFeed
   , statusToTweet
   , homeTimeline
   , getHomeFeed
   , retweetUrl
+  , getFeedUrl
+  , getMaxId
   , writeApi
   , readApi
-  , saveFeed
   ) where
 
 import           Data.Text                 (Text, pack, unpack)
@@ -53,9 +55,6 @@ import qualified Web.Twitter.Types         as TT
 import           Data.Int                  (Int64)
 import           Data.HashMap.Strict
 
--- | Insert here your own credentials. To get them, go to
---   https://dev.twitter.com/apps and create an application. This code will have runtime
---   errors until you do that.
 
 myoauth :: OAuth
 myoauth = newOAuth { oauthServerName     = CFG.serverName
@@ -152,8 +151,8 @@ instance ToJSON JsonResponse
 
 instance FromJSON BL.Types.Entities where
   parseJSON (Object x) = BL.Types.Entities <$> x .: "urls"
-                                  <*> x .: "hashtags"
-                                  <*> x .:? "media"
+                                           <*> x .: "hashtags"
+                                           <*> x .:? "media"
   parseJSON _ = fail "entities is expected to be an object"
 
 instance ToJSON BL.Types.Entities where
@@ -263,11 +262,9 @@ writeApi url = do
         Left (StatusCodeException (Network.HTTP.Types.Status code msg) _ _)  ->
             return $ Left $ ApiError $ "Twitter API returned bad status code: " ++ show code ++ " " ++ show msg
 
-        Right r -> case parseResult of
+        Right r -> case eitherDecode $ responseBody r of
             Left msg -> return $ Left $ ApiError msg
             Right t  -> return $ Right t
-            where
-                parseResult = eitherDecode $ responseBody r
 
 readApi :: Feed -> IO (Feed, (Either ApiError [Tweet]))
 readApi feed = do
@@ -282,13 +279,9 @@ readApi feed = do
     Left _ ->
       return (feed, (Left $ ApiError "Http error"))
 
-    Right r -> case parseResult of
-      Left msg ->
-        return (feed, (Left $ ApiError msg))
-      Right ts ->
-        return (feed, Right ts)
-      where
-        parseResult = eitherDecode $ responseBody r
+    Right r -> case eitherDecode $ responseBody r of
+      Left msg -> return (feed, (Left $ ApiError msg))
+      Right ts -> return (feed, Right ts)
 
   where
     unfeedUrl :: Feed -> Url
@@ -332,8 +325,7 @@ getCachedFeed db _ = do
   x <- readCachedFeed db
 
   case x of
-    Just (lastSeenId, countNew) ->
-        return $ homeTimelineSinceCount lastSeenId countNew
+    Just (lastSeenId, countNew) -> return $ homeTimelineSinceCount lastSeenId countNew
     Nothing -> return $ homeTimeline 0
 
   where
@@ -345,11 +337,20 @@ getCachedFeed db _ = do
 getHomeFeed :: DL.MyDb -> Int -> IO Feed
 getHomeFeed db n = do return $ homeTimeline n
 
-saveFeed :: DL.MyDb -> TweetId -> Int -> IO ()
-saveFeed db x y = do
-    DL.write db x y
-
 getUnreadCount :: DL.MyDb -> IO Int
 getUnreadCount db = do
    (_, _, n) <- DL.getPrevState db
    return n
+
+getFeedUrl :: TweetId -> Feed
+getFeedUrl x | x == 0 = homeTimeline 0
+getFeedUrl x | x > 0 = homeTimelineSince x
+
+getMaxId :: [Tweet] -> TweetId -> TweetId
+getMaxId [] oldMaxAvailableId = oldMaxAvailableId
+getMaxId ts _ = BL.Types.id_ $ maximum ts
+
+saveFeedStatus :: DL.MyDb -> [Tweet] -> IO ()
+saveFeedStatus db ts = do
+    (oldLastSeenId, oldMaxAvailableId, oldCountNew) <- DL.getPrevState db
+    DL.write db (getMaxId ts oldMaxAvailableId) (length ts)
