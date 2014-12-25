@@ -172,7 +172,7 @@ tweetComponent = createClass spec { displayName = "Tweet" , render = renderFun }
                         D.ul {className: "toolbar", id: "menu-" ++ (show this.props.id)} [
                             D.li { "data-tweet-id": (show this.props.id)
                                  , title: "Retweet"
-                                 , onClick: handleRetweetClick (show this.props.id)} [D.rawText "RT"]
+                                 , onClick: handleRetweetClick this.props.id_str} [D.rawText "RT"]
                           , D.li {} [D.a {href: (getOrigTweetUrl this.props.author this.props.id_str)
                                          , target: "_blank"
                                          , title: "View original"} [D.rawText "⌘"]]

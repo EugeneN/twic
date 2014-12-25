@@ -5,9 +5,11 @@ module UI.HTTP.App where
 import           Control.Monad.IO.Class
 import           Control.Monad                 (forever, forM_)
 import           Control.Exception             (fromException, handle)
-import           Control.Concurrent            (MVar, newMVar, modifyMVar_, takeMVar, modifyMVar, readMVar
-                                               , forkIO, threadDelay, killThread, myThreadId, ThreadId)
-import           Network.Wai                   (responseStream, Application, pathInfo
+import           Control.Concurrent            ( MVar, newMVar, modifyMVar_
+                                               , takeMVar, modifyMVar, readMVar
+                                               , forkIO, threadDelay, killThread
+                                               , myThreadId, ThreadId)
+import           Network.Wai                   ( responseStream, Application, pathInfo
                                                , responseLBS, responseFile, queryString)
 import           Network.HTTP.Types            (status200, HeaderName)
 import           Network.HTTP.Types.Header     (ResponseHeaders)
@@ -19,12 +21,14 @@ import           Data.ByteString
 import           Data.ByteString.Char8         (readInteger)
 import qualified Data.ByteString.Lazy          as BSL
 import           Data.Int                      (Int64)
-import qualified Data.Text                      as T
-import           Data.Text                      (Text)
+import qualified Data.Text                     as T
+import           Data.Text                     (Text)
 
 import           UI.HTTP.Json                  (justTweetsToJson, justUnreadCountToJson)
-import           UI.HTTP.Html                  (tweetsToHtml, retweetToHtml, justTweetsToHtml, homePage)
-import           BL.Core                       (getCachedFeed, readApi, writeApi, retweetUrl, getUnreadCount)
+import           UI.HTTP.Html                  ( tweetsToHtml, retweetToHtml
+                                               , justTweetsToHtml, homePage)
+import           BL.Core                       ( getCachedFeed, readApi, writeApi
+                                               , retweetUrl, getUnreadCount)
 import           BL.Types                      (TweetId, Message(..), Tweet)
 import           BL.DataLayer                  (MyDb)
 import           Config                        (heartbeatDelay)
@@ -106,7 +110,7 @@ startBroadcastWorker m cs = forkIO $
         clients <- readMVar cs
         broadcast (encode ts) clients
 
-trackConnection :: Client -> MVar [Client] -> IO ()
+trackConnection :: Client -> MVar WSState -> IO ()
 trackConnection client@(clientId, clientConn) cs = handle catchDisconnect $
   forever $ do
     x <- WS.receive clientConn
@@ -142,9 +146,7 @@ homeHandler :: Int -> Application
 homeHandler count request response = response $ responseStream status200 [mimeHtml] (homeStream count)
     where
         homeStream :: Int -> (Builder -> IO ()) -> IO () -> IO ()
-        homeStream count send flush = do
-          send $ renderHtmlBuilder $ homePage
-          flush
+        homeStream count send flush = return homePage >>= send . renderHtmlBuilder >> flush
 
 staticHandler :: ResponseHeaders -> FilePath -> Application
 staticHandler mime fn request response = response $ responseFile status200 mime fn Nothing
@@ -156,10 +158,8 @@ checkHandler :: MyDb -> Int -> Application
 checkHandler db count request response = response $ responseStream status200 [mimeJSON] (justCheckStreamJson db count)
      where
          justCheckStreamJson :: MyDb -> Int -> (Builder -> IO ()) -> IO () -> IO ()
-         justCheckStreamJson db count send flush = do
-             unreadCount <- getUnreadCount db
-             send $ justUnreadCountToJson unreadCount
-             flush
+         justCheckStreamJson db count send flush =
+             return db >>= getUnreadCount >>= send . justUnreadCountToJson >> flush
 
 updateHandler :: MyDb -> Int -> Application
 updateHandler db count request response = response $ responseStream status200 [mimeJSON] (justFeedStreamJson db count)
@@ -186,9 +186,9 @@ retweetHandler count request response = case queryString request of
             print ("bad retweet id" :: String)
             response $ responseLBS status200 [mimeText] "bad retweet id"
 
-    _ -> do
-        response $ responseLBS status200 [mimeText] "bad request"
+    _ -> response $ responseLBS status200 [mimeText] "bad request"
 
     where
         retweetStream :: TweetId -> (Builder -> IO ()) -> IO () -> IO ()
-        retweetStream id_ send flush = writeApi (retweetUrl id_) >>= send . renderHtmlBuilder . retweetToHtml >> flush
+        retweetStream id_ send flush =
+            return (retweetUrl id_) >>= writeApi >>= send . renderHtmlBuilder . retweetToHtml >> flush

@@ -88,7 +88,7 @@ bodyCss = do
     paddingLeft (px 20)
     paddingRight (px 20)
     boxShadow 0 0 (px 4) (setA 50 baseColor)
-    transition "all" (ms 100) linear (ms 100)
+    transition "all" (ms 200) linear (ms 200)
     fontSize (px 23)
 
 
@@ -128,11 +128,18 @@ bodyCss = do
     position absolute
     left (px 10)
 
+    "img" # hover ? do
+        zIndex 100
+
   ".user-icon-img" ? do
     width (px 30)
     height (px 30)
     margin (px 0) (px 0) (px 0) (px 0)
     borderRadius (pct 50) (pct 50) (pct 50) (pct 50)
+    transition "all" (ms 150) ease (ms 150)
+
+  ".user-icon-img" # hover ? do
+    transform $ scale 1.5 1.5
 
   ".tweet-body" ? do
     width (px 600)
@@ -180,7 +187,7 @@ bodyCss = do
         fontSize (px 20)
         cursor pointer
         boxShadow 0 0 (px 4) (setA 50 baseColor)
-        transition "all" (ms 100) linear (ms 100)
+        transition "all" (ms 150) ease (ms 150)
 
     ".no-new-tweets" ? do
         padding (px 4)  (px 4)  (px 4)  (px 4)
@@ -207,6 +214,8 @@ bodyCss = do
 
     ".there-are-new-tweets" # hover ? do
         background cyan
+        transform $ scale 1.15 1.15
+
 
     a ? do
       transition "all" (ms 100) linear (ms 100)

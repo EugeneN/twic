@@ -20,6 +20,16 @@ module.exports = function(grunt) {
               ],
               dest:  "../../../../dist/cs/Main.js"
           }
+          , cjs: {
+              src: [
+                    "bower_components/jquery/dist/jquery.js"
+                  , "bower_components/rxjs/dist/rx.all.js"
+                  , "bower_components/rxjs-jquery/rx.jquery.js"
+                  , "bower_components/react/react.js"
+                  , "../../../../dist/cs/cjs/**.js"
+              ],
+              dest:  "../../../../dist/cs/cjs/CJSMain.js"
+          }
       }
 
     , psc: {
@@ -32,6 +42,17 @@ module.exports = function(grunt) {
             , dest: "../../../../dist/cs/App.js"
           }
       }
+
+    , pscMake: {
+        options: {
+            main: "Main"
+          , modules: ["Main"]
+        }
+      , all: {
+          src: ["<%=srcFiles%>"]
+        , dest: "../../../../dist/cs/cjs/"
+      }
+    }
   });
 
   grunt.loadNpmTasks("grunt-purescript");
