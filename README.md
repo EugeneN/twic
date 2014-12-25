@@ -22,7 +22,9 @@ Twic is a simple reader of a Twitter user's home feed. It's main goal is a searc
 
 - extra options and data are shown on mouse over;
 
-- uses Twitter streaming API and websockets and client side storage to provide instant and real time reaction for user input.
+- uses Twitter streaming API and websockets and client side storage to provide instant and real time reaction for user input;
+
+- gentle animations here and there to exploit user's muscle memory and continuity feeling.
 
 All the checks are done automatically in background. User has a very simple workflow - if the single button in user interface is orange, then he/she may click on it and get new tweets. The button becomes grey until next tweets will be available.
 
@@ -51,4 +53,4 @@ Go to [http://localhost:3000/](http://localhost:3000/)
 
 # TODO
 
-A lot. 
+A lot.
