@@ -96,10 +96,28 @@ instance asHtmlMedia :: AsHtml EntityMedia where
             "photo" -> D.img {className: "inline-img", src: url} []
             x -> D.div {className: "unknown-media"} [D.rawText "Unknown media"]
 
+
 handleRetweetClick id_ = do
-    trace $ "click" ++ id_
-    retweet id_
+    let url = "/retweet/?id=" ++ id_
+    (rioPost url Nothing) ~> retweetResultHandler
     pure unit
+
+    where
+        retweetResultHandler :: forall e. AjaxResult -> Eff (trace :: Trace | e) Unit
+        retweetResultHandler resp = do
+            trace $ "retweeted " ++ show resp
+            pure unit
+
+handleStarClick id_ = do
+    let url = "/star?id=" ++ id_
+    (rioPost url Nothing) ~> starResultHandler
+    pure unit
+
+    where
+        starResultHandler :: forall e. AjaxResult -> Eff (trace :: Trace | e) Unit
+        starResultHandler resp = do
+            trace $ "starred " ++ show resp
+            pure unit
 
 messageComponent :: ComponentClass {message :: String} {}
 messageComponent = createClass spec { displayName = "Message", render = renderFun } where
@@ -177,7 +195,8 @@ tweetComponent = createClass spec { displayName = "Tweet" , render = renderFun }
                                          , target: "_blank"
                                          , title: "View original"} [D.rawText "⌘"]]
                           , D.li {title: "Reply"} [D.rawText "↩"]
-                          , D.li {title: "Star"} [D.rawText "★"]
+                          , D.li { title: "Star"
+                                 , onClick: handleStarClick this.props.id_str } [D.rawText "★"]
                           , D.li {title: "Mark"} [D.rawText "⚑"] ] ] ]
 
 

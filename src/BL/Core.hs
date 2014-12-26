@@ -26,6 +26,7 @@ module BL.Core (
   , getMaxId
   , writeApi
   , readApi
+  , starUrl
   ) where
 
 import           Data.Text                 (Text, pack, unpack)
@@ -290,6 +291,9 @@ readApi feed = do
 
 retweetUrl :: TweetId -> Url
 retweetUrl id_ = "https://api.twitter.com/1.1/statuses/retweet/" ++ (show id_) ++ ".json"
+
+starUrl :: TweetId -> Url
+starUrl id_ = "https://api.twitter.com/1.1/favorites/create.json?id=" ++ (show id_)
 
 userTimeline :: Username -> Int -> Feed
 userTimeline name 0 = UserTimeline $

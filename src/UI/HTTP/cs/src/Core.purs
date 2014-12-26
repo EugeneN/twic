@@ -220,6 +220,11 @@ data EntityMediaSizes = EntityMediaSizes { thumb  :: EntityMediaSize
                                          , small  :: EntityMediaSize
                                          }
 
+type AjaxResult = String
+
+data Observer = Observer { ok :: forall e. AjaxResult -> Eff e Unit
+                         , nok :: Maybe (forall e. AjaxResult -> Eff e Unit) }
+
 instance isForeignMediaSizes :: IsForeign EntityMediaSizes where
   read x = do
     thumb   <- "thumb" `readProp` x
@@ -233,19 +238,18 @@ instance isForeignMediaSizes :: IsForeign EntityMediaSizes where
 instance showResponse :: Show X.Response where
     show = toString
 
-retweet :: forall e. String -> Eff (trace :: Trace, ajax :: XI.Ajax | e) Unit
-retweet id_ = do
-    let url = "/retweet/?id=" ++ id_
+--retweet :: forall e eff. String
+--                  -> (AjaxResult -> Eff eff Unit)
+--                  -> Eff (trace :: Trace, ajax :: XI.Ajax | e) Unit
+--retweet id_ retweetResultHandler = do
+--    let url = "/retweet/?id=" ++ id_
+--
+--    trace $ "retweet " ++ url
+--
+--    (rioPost url Nothing) ~> retweetResultHandler
+--
+--    pure unit
 
-    trace $ "retweet " ++ url
-
-    X.post X.defaultAjaxOptions
-        { onReadyStateChange = X.onDone \resp -> do
-          trace $ "retweeted " ++ show resp
-          pure unit
-        } url {} (XT.UrlEncoded "")
-
-    pure unit
 
 fromResponse :: String -> ApiResponse
 fromResponse x = case (readJSON x :: F ApiResponse) of

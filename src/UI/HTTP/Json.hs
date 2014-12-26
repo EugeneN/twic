@@ -26,3 +26,16 @@ justTweetsToJson (Right ts) =
 
 justUnreadCountToJson :: Int -> Builder
 justUnreadCountToJson n = fromLazyByteString $ encode $ JsonUnreadCount {unreadCount = n}
+
+
+retweetToJson :: Either ApiError Tweet -> Builder
+retweetToJson (Left (ApiError msg)) =
+    fromLazyByteString $ encode $ JsonApiError {errTitle = "Error", errMessage = T.pack msg}
+
+retweetToJson (Right t) = fromLazyByteString $ encode t
+
+starToJson :: Either ApiError Tweet -> Builder
+starToJson (Left (ApiError msg)) =
+    fromLazyByteString $ encode $ JsonApiError {errTitle = "Error", errMessage = T.pack msg}
+
+starToJson (Right t) = fromLazyByteString $ encode t

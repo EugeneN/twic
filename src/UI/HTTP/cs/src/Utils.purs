@@ -67,7 +67,7 @@ foreign import rioGet
 
 foreign import rioPost
     """
-    function rioGet(url){
+    function rioPost(url){
         return function(data){
             return Rx.Observable.create(function(observer){
                 var ok = function(result) { observer.onNext(JSON.stringify(result)) },

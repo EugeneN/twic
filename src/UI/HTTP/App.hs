@@ -23,12 +23,12 @@ import qualified Data.ByteString.Lazy          as BSL
 import           Data.Int                      (Int64)
 import qualified Data.Text                     as T
 import           Data.Text                     (Text)
-
-import           UI.HTTP.Json                  (justTweetsToJson, justUnreadCountToJson)
+import           UI.HTTP.Json                  ( justTweetsToJson, justUnreadCountToJson
+                                               , retweetToJson, starToJson)
 import           UI.HTTP.Html                  ( tweetsToHtml, retweetToHtml
                                                , justTweetsToHtml, homePage)
 import           BL.Core                       ( getCachedFeed, readApi, writeApi
-                                               , retweetUrl, getUnreadCount)
+                                               , retweetUrl, starUrl, getUnreadCount)
 import           BL.Types                      (TweetId, Message(..), Tweet)
 import           BL.DataLayer                  (MyDb)
 import           Config                        (heartbeatDelay)
@@ -69,6 +69,9 @@ httpapp db count request sendResponse = do
 
     ["retweet"]         -> retweetHandler count request sendResponse
     ["retweet", _]      -> retweetHandler count request sendResponse
+
+    ["star"]            -> starHandler count request sendResponse
+    ["star", _]         -> starHandler count request sendResponse
 
     path                -> notFoundHandler count request sendResponse
 
@@ -180,15 +183,35 @@ retweetHandler count request response = case queryString request of
     [("id", Just id_)] -> case readInteger id_ of
           Just (int, str) -> do
             print $ "got retweet " ++ show id_
-            response $ responseStream status200 [mimeHtml] (retweetStream (fromIntegral int :: Int64))
+            response $ responseStream status200 [mimeJSON] (retweetStream (fromIntegral int :: Int64))
 
           Nothing -> do
             print ("bad retweet id" :: String)
-            response $ responseLBS status200 [mimeText] "bad retweet id"
+            response $ responseLBS status200 [mimeJSON] "bad retweet id"
 
-    _ -> response $ responseLBS status200 [mimeText] "bad request"
+    _ -> response $ responseLBS status200 [mimeJSON] "bad request"
 
     where
         retweetStream :: TweetId -> (Builder -> IO ()) -> IO () -> IO ()
         retweetStream id_ send flush =
-            return (retweetUrl id_) >>= writeApi >>= send . renderHtmlBuilder . retweetToHtml >> flush
+            return (retweetUrl id_) >>= writeApi >>= send . retweetToJson >> flush
+
+
+starHandler :: Int -> Application
+starHandler count request response = case queryString request of
+    [("id", Just id_)] -> case readInteger id_ of
+          Just (int, str) -> do
+            print $ "got star " ++ show id_
+            response $ responseStream status200 [mimeJSON] (starStream (fromIntegral int :: Int64))
+
+          Nothing -> do
+            print ("bad star id" :: String)
+            response $ responseLBS status200 [mimeJSON] "bad star id"
+
+    _ -> do
+        response $ responseLBS status200 [mimeJSON] "bad request"
+
+    where
+        starStream :: TweetId -> (Builder -> IO ()) -> IO () -> IO ()
+        starStream id_ send flush =
+            return (starUrl id_) >>= writeApi >>= send . starToJson >> flush
