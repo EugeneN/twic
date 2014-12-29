@@ -15,7 +15,7 @@ usernameAlphabet = ['a'..'z']++['A'..'Z']++['0'..'9']++"_"
 
 hashtagAlphabet = ['a'..'z']++['A'..'Z']++['0'..'9']++"_"
 
-whitespaces = " \n\t@#"
+whitespaces = " \n\t"
 
 username = do
   char '@'
@@ -27,18 +27,11 @@ link = do
   url <- many1 (oneOf urlAlphabet)
   return $ Link $ proto ++ url
 
-justAt = do
-    char '@'
-    return $ PlainText "@"
-
-justhash = do
-    char '#'
-    return $ PlainText "#"
 
 hashtag = do
   char '#'
   t <- many1 $ oneOf hashtagAlphabet
-  return $ Hashtag t 
+  return $ Hashtag t
 
 retweet = do
   string "RT"
@@ -54,11 +47,11 @@ spcs = do
     s <- many1 (oneOf whitespaces)
     return $ Spaces s
 
-hashOrText = try hashtag <|> try justhash <|> plaintext
+hashOrText = try hashtag <|> plaintext
 
 usernameOrText = try username <|> plaintext
 
-linkOrText = try link <|> try justAt <|> plaintext
+linkOrText = try link <|> plaintext
 
 chunk = try username <|> try hashtag <|> try link <|> plaintext <|> spcs
 

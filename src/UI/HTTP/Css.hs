@@ -21,7 +21,7 @@ bodyCss = do
 
     fontFamily ["Roboto"] [sansSerif]
     fontSize (px 16)
-    fontWeight normal
+    fontWeight $ weight 300
 
   li ? do
     listStyleType none
@@ -68,7 +68,7 @@ bodyCss = do
     --content none
 
   ".username-tag" ? do
-    fontWeight bold
+    fontWeight (weight 400)
     color entityColor
 
 
@@ -289,6 +289,28 @@ bodyCss = do
     a ? do
         color baseColor
         fontStyle italic
+
+  "#write-tweet-id" ? do
+    display none
+
+  ".write-tweet" ? do
+    position fixed
+    top (px 66)
+    width (pct 100)
+    height (px 80)
+    background $ rgba 40 40 40 95
+
+    input # focus ? do
+      borderTop solid (px 1) transparent
+      borderBottom solid (px 1) transparent
+      borderLeft solid (px 1) transparent
+      borderRight solid (px 1) transparent
+
+    input ? do
+      width (px 567)
+      fontSize (px 25)
+      marginTop (px 15)
+      padding (px 7) (px 11) (px 7) (px 11)
 
   --".pop" ? do
   --  display inlineBlock

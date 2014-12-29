@@ -5,7 +5,8 @@ import Control.Monad.Eff (Eff(..))
 import Data.Foreign
 import Data.Foreign.Class
 import Data.Foreign.NullOrUndefined
-
+import DOM (DOM(..))
+import Control.Monad.Eff.Ref
 import qualified Network.XHR as X
 import qualified Network.XHR.Internal as XI
 import qualified Network.XHR.Types as XT
@@ -18,15 +19,11 @@ import Data.Maybe
 
 import Utils
 import Types
+import Config
 
+import UI.Messages (renderMessage)
+import UI.LoaderIndicator (showLoader, hideLoader)
 
-data TweetElement = AtUsername String
-                  | Link String
-                  | PlainText String
-                  | Hashtag String
-                  | Retweet String
-                  | Spaces String
-                  | Unparsable String
 
 toTweetToken :: String -> String -> TweetElement
 toTweetToken "AtUsername"   = AtUsername
@@ -43,14 +40,6 @@ instance isForeignTweetElement :: IsForeign TweetElement where
 
         return $ toTweetToken k v
 
-
-data Author = Author { name                  :: String
-                     , authorId              :: Number
-                     , screen_name           :: String
-                     , default_profile_image :: Boolean
-                     , profile_image_url     :: Url
-                     }
-
 instance isForeignAuthor :: IsForeign Author where
     read data_ = do
         n <- readProp "name" data_
@@ -65,15 +54,6 @@ instance isForeignAuthor :: IsForeign Author where
                         , default_profile_image: default_img
                         , profile_image_url: img
                         }
-
-data Tweet = Tweet { text       :: [TweetElement]
-                   , created_at :: String
-                   , id         :: TweetId
-                   , id_str     :: String
-                   , user       :: Author
-                   , entities   :: Entities
-                   , retweet    :: Maybe Tweet
-                   }
 
 instance isForeignTweet :: IsForeign Tweet where
     read x = do
@@ -94,18 +74,6 @@ instance isForeignTweet :: IsForeign Tweet where
                        , retweet: r
                        }
 
-data ApiResponse  = ResponseSuccess { okTitle    :: String
-                                    , okTweets   :: [Tweet]
-                                    }
-
-                  | ResponseError { errTitle    :: String
-                                  , errMessage  :: String
-                                  }
-
-                  | Timeout { toTitle   :: String
-                            , toMessage :: String
-                            }
-
 instance isForeignResponseError :: IsForeign ApiResponse
     where
         read data_ =
@@ -123,19 +91,11 @@ instance isForeignResponseError :: IsForeign ApiResponse
                 m <- readProp "errMessage" data_
                 return $ ResponseError {errTitle: t, errMessage: m}
 
-data CheckResponse = CheckResponse { unreadTitle :: String
-                                   , unreadCount :: Number }
-
 instance isForeignCheckResponse :: IsForeign CheckResponse where
     read x = do
         c <- "unreadCount" `readProp` x
 
         return $ CheckResponse { unreadTitle: (show c) ++ " new tweets", unreadCount: c }
-
-data Entities = Entities { urls     :: [EntityUrl]
-                         , hashtags :: [EntityHashtag]
-                         , media    :: Maybe [EntityMedia]
-                         }
 
 instance isForeignEntities :: IsForeign Entities where
   read x = do
@@ -144,11 +104,6 @@ instance isForeignEntities :: IsForeign Entities where
     m <- runNullOrUndefined <$> "media" `readProp` x
 
     return $ Entities { urls: u, hashtags: h, media: m }
-
-data EntityUrl = EntityUrl { eExpandedUrl :: Url
-                           , eUrl         :: Url
-                           , eIndices     :: [Number]
-                           }
 
 instance isForeignEntityUrl :: IsForeign EntityUrl where
   read x = do
@@ -162,25 +117,12 @@ instance isForeignEntityUrl :: IsForeign EntityUrl where
                        , eIndices: eIndices
                        }
 
-data EntityHashtag = EntityHashtag { hText    :: String
-                                   , hIndices :: [Number]
-                                   }
-
 instance isForeignHashtag :: IsForeign EntityHashtag where
   read x = do
     t <- "text" `readProp` x
     i <- "indices" `readProp` x
 
     return $ EntityHashtag { hText: t, hIndices: i }
-
-data EntityMedia = EntityMedia { mType        :: String
-                               , mIndices     :: [Number]
-                               , mUrl         :: Url
-                               , mMediaUrl    :: Url
-                               , mDisplayUrl  :: String
-                               , mExpandedUrl :: Url
-                               , mSizes       :: EntityMediaSizes
-                               }
 
 instance isForeignMedia :: IsForeign EntityMedia where
   read x = do
@@ -201,11 +143,6 @@ instance isForeignMedia :: IsForeign EntityMedia where
                          , mSizes: sizes
                          }
 
-data EntityMediaSize = EntityMediaSize { h :: Number
-                                       , w :: Number
-                                       , resize :: String
-                                       }
-
 instance isForeignMediaSize :: IsForeign EntityMediaSize where
   read x = do
     h <- "h" `readProp` x
@@ -213,17 +150,6 @@ instance isForeignMediaSize :: IsForeign EntityMediaSize where
     resize <- "resize" `readProp` x
 
     return $ EntityMediaSize { h: h, w: w, resize: resize}
-
-data EntityMediaSizes = EntityMediaSizes { thumb  :: EntityMediaSize
-                                         , large  :: EntityMediaSize
-                                         , medium :: EntityMediaSize
-                                         , small  :: EntityMediaSize
-                                         }
-
-type AjaxResult = String
-
-data Observer = Observer { ok :: forall e. AjaxResult -> Eff e Unit
-                         , nok :: Maybe (forall e. AjaxResult -> Eff e Unit) }
 
 instance isForeignMediaSizes :: IsForeign EntityMediaSizes where
   read x = do
@@ -233,7 +159,6 @@ instance isForeignMediaSizes :: IsForeign EntityMediaSizes where
     small   <- "small" `readProp` x
 
     return $ EntityMediaSizes {thumb: thumb, large: large, medium: medium, small: small}
-
 
 instance showResponse :: Show X.Response where
     show = toString
@@ -267,3 +192,30 @@ fromWsMessage s = case (readJSON s :: F [Tweet]) of
     Left err -> []
 
     Right ts -> ts
+
+--------------------------------------------------------------------------------
+
+
+initialState :: State
+initialState = State { oldFeed: OldFeed []
+                     , currentFeed: CurrentFeed []
+                     , newFeed: NewFeed [] }
+
+
+foreign import setTitle
+    """
+    function setTitle(a) {
+      return function() {
+        document.title = a;
+        return undefined;
+      }
+    }
+    """ :: forall eff. String -> Eff (dom :: DOM | eff) Unit
+
+
+
+
+
+
+
+

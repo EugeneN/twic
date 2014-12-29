@@ -1,12 +1,28 @@
 module Utils where
 
+import Debug.Trace
 import Control.Monad.Eff (Eff(..))
+import Control.Monad.Eff.Ref
 import DOM (DOM(..))
 import qualified Control.Monad.JQuery as J
 import Data.DOM.Simple.Types (HTMLElement(..))
 import Data.DOM.Simple.Element (getAttribute)
+
 import qualified Rx.Observable as Rx
+import Rx.JQuery
+
 import Types
+
+
+import Data.Either
+import Data.Monoid
+import Data.Array (length, reverse)
+import React.Types (React(), Element())
+
+import qualified Network.XHR as X
+import qualified Network.XHR.Internal as XI
+import qualified Network.XHR.Types as XT
+
 
 foreign import toString
     "function toString(a){                \
@@ -96,3 +112,44 @@ foreign import getIntervalStream
 
 (~>) :: forall eff a. Rx.Observable a -> (a -> Eff eff Unit) -> Eff eff Unit
 (~>) = Rx.subscribe
+
+
+rxTest :: forall e. Eff (trace :: Trace, dom :: DOM | e) Unit
+rxTest = do
+    spansStream <- J.select "span" >>= onAsObservable "mouseover"
+    imgsStream <- J.select "img" >>= onAsObservable "mouseover"
+
+    let s = spansStream <> imgsStream
+--    s ~> (toString >>> trace)
+
+    let s2 = extractCoords <$> s
+    s2 ~> (toString >>> trace)
+
+foreign import filterRx
+    """
+    function filterRx(f){
+        return function(observable) {
+            return observable.filter(f)
+        }
+    }
+    """ :: forall a. (a -> Boolean) -> Rx.Observable a -> Rx.Observable a
+
+foreign import byId
+    """
+    function byId(idstr){
+        return function(event) {
+            return event.target.id === idstr;
+        }
+    }
+    """ :: forall a. String -> a -> Boolean
+
+startAppBus state = do
+    bodyClicks <- J.select "body" >>= onAsObservable "click"
+    (filterRx (byId "load-new-tweets-id") bodyClicks) ~> \_ -> trace "click"
+
+    pure unit
+
+foreign import value
+    "function value(el) {\
+    \  return el.value;\
+    \}" :: Element -> String

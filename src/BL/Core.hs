@@ -23,6 +23,7 @@ module BL.Core (
   , getHomeFeed
   , retweetUrl
   , getFeedUrl
+  , tweetUrl
   , getMaxId
   , writeApi
   , readApi
@@ -294,6 +295,9 @@ retweetUrl id_ = "https://api.twitter.com/1.1/statuses/retweet/" ++ (show id_) +
 
 starUrl :: TweetId -> Url
 starUrl id_ = "https://api.twitter.com/1.1/favorites/create.json?id=" ++ (show id_)
+
+tweetUrl :: TweetBody -> Url
+tweetUrl status = "https://api.twitter.com/1.1/statuses/update.json?status=" ++ B8.unpack status
 
 userTimeline :: Username -> Int -> Feed
 userTimeline name 0 = UserTimeline $

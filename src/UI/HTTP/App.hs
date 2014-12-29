@@ -18,18 +18,18 @@ import qualified Network.Wai.Handler.WebSockets as WaiWS
 import           Blaze.ByteString.Builder      (Builder, fromByteString)
 import           Text.Blaze.Html.Renderer.Utf8 (renderHtmlBuilder)
 import           Data.ByteString
-import           Data.ByteString.Char8         (readInteger)
+import qualified Data.ByteString.Char8         as B8
 import qualified Data.ByteString.Lazy          as BSL
 import           Data.Int                      (Int64)
 import qualified Data.Text                     as T
 import           Data.Text                     (Text)
 import           UI.HTTP.Json                  ( justTweetsToJson, justUnreadCountToJson
-                                               , retweetToJson, starToJson)
+                                               , retweetToJson, starToJson, tweetToJson)
 import           UI.HTTP.Html                  ( tweetsToHtml, retweetToHtml
                                                , justTweetsToHtml, homePage)
 import           BL.Core                       ( getCachedFeed, readApi, writeApi
-                                               , retweetUrl, starUrl, getUnreadCount)
-import           BL.Types                      (TweetId, Message(..), Tweet)
+                                               , retweetUrl, starUrl, tweetUrl, getUnreadCount)
+import           BL.Types                      (TweetId, Message(..), Tweet, TweetBody)
 import           BL.DataLayer                  (MyDb)
 import           Config                        (heartbeatDelay)
 import           Data.Aeson                    (encode)
@@ -72,6 +72,9 @@ httpapp db count request sendResponse = do
 
     ["star"]            -> starHandler count request sendResponse
     ["star", _]         -> starHandler count request sendResponse
+
+    ["tweet"]            -> tweetHandler count request sendResponse
+    ["tweet", _]         -> tweetHandler count request sendResponse
 
     path                -> notFoundHandler count request sendResponse
 
@@ -180,7 +183,7 @@ updateHandler db count request response = response $ responseStream status200 [m
 
 retweetHandler :: Int -> Application
 retweetHandler count request response = case queryString request of
-    [("id", Just id_)] -> case readInteger id_ of
+    [("id", Just id_)] -> case B8.readInteger id_ of
           Just (int, str) -> do
             print $ "got retweet " ++ show id_
             response $ responseStream status200 [mimeJSON] (retweetStream (fromIntegral int :: Int64))
@@ -199,7 +202,7 @@ retweetHandler count request response = case queryString request of
 
 starHandler :: Int -> Application
 starHandler count request response = case queryString request of
-    [("id", Just id_)] -> case readInteger id_ of
+    [("id", Just id_)] -> case B8.readInteger id_ of
           Just (int, str) -> do
             print $ "got star " ++ show id_
             response $ responseStream status200 [mimeJSON] (starStream (fromIntegral int :: Int64))
@@ -208,10 +211,23 @@ starHandler count request response = case queryString request of
             print ("bad star id" :: String)
             response $ responseLBS status200 [mimeJSON] "bad star id"
 
-    _ -> do
-        response $ responseLBS status200 [mimeJSON] "bad request"
+    _ -> response $ responseLBS status200 [mimeJSON] "bad request"
 
     where
         starStream :: TweetId -> (Builder -> IO ()) -> IO () -> IO ()
         starStream id_ send flush =
             return (starUrl id_) >>= writeApi >>= send . starToJson >> flush
+
+tweetHandler :: Int -> Application
+tweetHandler count request response = case queryString request of
+    [("status", Just status)] -> do
+        print "got tweet "
+        print status
+        response $ responseStream status200 [mimeJSON] (tweetStream status)
+
+    _ -> response $ responseLBS status200 [mimeJSON] "bad request"
+
+    where
+        tweetStream :: TweetBody -> (Builder -> IO ()) -> IO () -> IO ()
+        tweetStream status send flush =
+            return (tweetUrl status) >>= writeApi >>= send . tweetToJson >> flush

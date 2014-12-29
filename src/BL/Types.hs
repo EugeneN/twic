@@ -8,10 +8,12 @@ import           GHC.Generics
 import           Control.Applicative
 import           Control.Monad
 import           Data.Int               (Int64)
+import           Data.ByteString
 
 type Url = String
 type Username = String
 type TweetId = Int64
+type TweetBody = ByteString
 
 data Message = Message Int
 

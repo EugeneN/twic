@@ -39,3 +39,9 @@ starToJson (Left (ApiError msg)) =
     fromLazyByteString $ encode $ JsonApiError {errTitle = "Error", errMessage = T.pack msg}
 
 starToJson (Right t) = fromLazyByteString $ encode t
+
+tweetToJson :: Either ApiError Tweet -> Builder
+tweetToJson (Left (ApiError msg)) =
+    fromLazyByteString $ encode $ JsonApiError {errTitle = "Error", errMessage = T.pack msg}
+
+tweetToJson (Right t) = fromLazyByteString $ encode t

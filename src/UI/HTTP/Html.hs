@@ -129,10 +129,14 @@ htmlPage title_ body_ error_ = docTypeHtml $ do
                               Nothing -> mempty
                               Just exp -> div_ ! class_ "error" $ exp
 
+    div_ ! A.id "load-history-container-id" $ mempty
+
     div_ ! class_ "container" ! A.id "container" $ do
       case body_ of
           Nothing -> ""
           Just b -> ul ! A.id "feed" $ do b
+
+    div_ ! A.id "write-tweet-container-id" $ mempty
 
     div_ ! class_ "refresh" ! A.id "refresh" $ do
       H.button ! class_ "there-are-new-tweets pop"
