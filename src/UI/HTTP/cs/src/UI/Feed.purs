@@ -14,6 +14,10 @@ import React ( createClass , eventHandler , renderComponentById , spec )
 import React.Types ( Component() , ComponentClass() , Event() , React()
                    , ReactFormEvent() , ReactThis() )
 
+import qualified Rx.Observable as Rx
+import Rx.JQuery
+import qualified Control.Monad.JQuery as J
+
 import qualified Lib.WebSocket as WS
 import Config (checkButtonContainerId, messagesId, containerId, socketUrl, updateUrl)
 import Core
@@ -67,6 +71,18 @@ renderCheckButton state_ targetId count =
     renderComponentById (checkButtonComponent {count: count, state: state_} []) targetId
 
 --------------------------------------------------------------------------------
+
+listenFeedKeys state = do
+    bodyKeys <- J.select "body" >>= onAsObservable "keyup"
+
+    let keyCodesS = keyEventToKeyCode <$> bodyKeys
+
+    (filterRx ((==) Delete) keyCodesS) ~> f
+
+    where
+    f _ = do
+        loadTweetsFromState state
+        pure unit
 
 startWsClient :: forall r.  RefVal State
                          -> Eff ( react :: React

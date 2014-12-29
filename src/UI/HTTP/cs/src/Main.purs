@@ -7,10 +7,10 @@ import Config
 import Types
 import Utils
 import Core
-import UI.Feed (loadFeed, startWsClient)
+import UI.Feed (loadFeed, startWsClient, listenFeedKeys)
 import UI.LoaderIndicator (showLoader, hideLoader)
 import UI.Messages (renderMessage)
-import UI.TweetWriter (listenKeys)
+import UI.TweetWriter (listenWriteKeys)
 
 
 
@@ -19,7 +19,8 @@ main = do
     trace "hello there"
     state <- newRef initialState
 
-    listenKeys
+    listenWriteKeys
+    listenFeedKeys state
 
     loadFeed state
     startWsClient state

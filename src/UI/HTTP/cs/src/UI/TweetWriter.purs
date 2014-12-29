@@ -18,9 +18,6 @@ import Types (AjaxResult())
 import UI.Messages (renderMessage)
 
 
-foreign import setFocus "function setFocus(id) { return function() { jQuery('#' + id).focus(); }}" :: forall eff. String -> Eff eff Unit
-foreign import which "function which(ev) { return ev.which; }" :: J.JQueryEvent -> Number
-
 handleShowWriteInput :: forall eff. Eff (dom :: DOM, react :: React, trace :: Trace | eff) Unit
 handleShowWriteInput = do
     trace "handleShowWriteInput here"
@@ -54,20 +51,20 @@ handleSubmitTweet text = do
 
 
 handleWriteKeyPress this k = do
-    case k.keyCode of
-        27 -> handleShowWriteButton
-        13 -> handleSubmitTweet $ value k.target
-        _  -> pure unit
+    case keyEventToKeyCode k of
+        Escape -> handleShowWriteButton
+        Enter  -> handleSubmitTweet $ value k.target
+        _      -> pure unit
 
     pure unit
 
-listenKeys = do
+listenWriteKeys = do
     bodyKeys <- J.select "body" >>= onAsObservable "keyup"
 
-    (filterRx (isKey 13) bodyKeys) ~> \_ -> handleShowWriteInput
-    (filterRx (isKey 27) bodyKeys) ~> \_ -> handleShowWriteButton
+    let keyCodesS = keyEventToKeyCode <$> bodyKeys
 
-    where isKey a x = which x == a
+    (filterRx ((==) Insert) keyCodesS) ~> \_ -> handleShowWriteInput
+    (filterRx ((==) Escape) keyCodesS) ~> \_ -> handleShowWriteButton
 
 
 writeInputComponent :: ComponentClass {} {}
