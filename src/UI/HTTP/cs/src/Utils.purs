@@ -157,21 +157,28 @@ foreign import value
 foreign import setFocus "function setFocus(id) { return function() { jQuery('#' + id).focus(); }}" :: forall eff. String -> Eff eff Unit
 foreign import which "function which(ev) { return ev.which; }" :: forall a. a -> Number
 
-data KeyCode = Insert | Escape | Enter | Delete | UnknownKey Number
+data KeyCode = Insert
+             | Escape
+             | Enter
+             | Delete
+             | F2
+             | UnknownKey Number
 
 keyEventToKeyCode :: forall a. a -> KeyCode -- JQueryEvent a, ReactEvent a =>
-keyEventToKeyCode x | which x == 13 = Enter
-keyEventToKeyCode x | which x == 27 = Escape
-keyEventToKeyCode x | which x == 45 = Insert
-keyEventToKeyCode x | which x == 46 = Delete
+keyEventToKeyCode x | which x == 13  = Enter
+                    | which x == 27  = Escape
+                    | which x == 45  = Insert
+                    | which x == 46  = Delete
+                    | which x == 113 = F2
 
-keyEventToKeyCode x                 = UnknownKey $ which x
+keyEventToKeyCode x                  = UnknownKey $ which x
 
 instance eqKeyCode :: Eq KeyCode where
     (==) Insert Insert = true
     (==) Escape Escape = true
     (==) Enter  Enter  = true
     (==) Delete Delete = true
+    (==) F2     F2     = true
     (==) _      _      = false
 
     (/=) a      b      = not $ (==) a b

@@ -6,7 +6,7 @@ import           Network.Wai
 import           Network.Wai.Handler.Warp (run)
 import           UI.CLI.Cli               (parseArgs, Args(..))
 import           UI.HTTP.App              (app)
-import           BL.DataLayer             (openDb, getPrevState)
+import           BL.DataLayer             (openDb, getPrevState, MyDb)
 import           BL.Worker                (pollWorker, streamWorker)
 import           BL.Types                 (Message(..), Tweet(..))
 import           Config                   (port, delay)
@@ -15,6 +15,7 @@ import           Control.Concurrent       (MVar, newMVar)
 
 usage = "Usage: <me> serve|dump tweets-count"
 
+handleAction :: String -> MyDb -> MVar [Tweet] -> Int -> IO ()
 handleAction "serve" db m count = do
 --    putStrLn $ "Starting a pollWorker with delay " ++ show delay
 --    pollWorkerId <- pollWorker db m delay

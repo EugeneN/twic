@@ -16,6 +16,7 @@ import Config (writeTweetContainerId, messagesId)
 import Utils
 import Types (AjaxResult())
 import UI.Messages (renderMessage)
+import UI.LoaderIndicator (showLoader)
 
 
 handleShowWriteInput :: forall eff. Eff (dom :: DOM, react :: React, trace :: Trace | eff) Unit
@@ -39,6 +40,9 @@ handleSubmitTweet "" = do
 handleSubmitTweet text = do
     trace $ "gonna tweet this: " ++ text
     let url = "/tweet?status=" ++ text
+
+    showLoader writeTweetContainerId
+
     (rioPost url Nothing) ~> tweetResultHandler
     pure unit
 
@@ -63,7 +67,7 @@ listenWriteKeys = do
 
     let keyCodesS = keyEventToKeyCode <$> bodyKeys
 
-    (filterRx ((==) Insert) keyCodesS) ~> \_ -> handleShowWriteInput
+    (filterRx ((==) F2) keyCodesS)     ~> \_ -> handleShowWriteInput
     (filterRx ((==) Escape) keyCodesS) ~> \_ -> handleShowWriteButton
 
 
