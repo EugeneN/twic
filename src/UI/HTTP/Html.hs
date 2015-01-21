@@ -139,9 +139,9 @@ htmlPage title_ body_ error_ = docTypeHtml $ do
     div_ ! A.id "write-tweet-container-id" $ mempty
 
     div_ ! class_ "refresh" ! A.id "refresh" $ do
-      H.button ! class_ "there-are-new-tweets pop"
+      H.button ! class_ "no-new-tweets pop"
                ! A.id "load-new-tweets-id"
-               $ ">>="
+               $ "0"
 
     H.script ! A.src "/cs/Main.js" ! A.type_ "text/javascript" $ mempty
 
@@ -170,5 +170,5 @@ homePage :: Html
 homePage = htmlPage title_ body_ err_
     where
         title_ = Just "Hello"
-        body_ = Just $ li ! class_ "no-tweets" $ "Loading tweets"
+        body_ = Nothing
         err_ = Nothing

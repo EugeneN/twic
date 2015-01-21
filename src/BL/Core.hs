@@ -347,7 +347,7 @@ getHomeFeed db n = do return $ homeTimeline n
 
 getUnreadCount :: DL.MyDb -> IO Int
 getUnreadCount db = do
-   (_, _, n) <- DL.getPrevState db
+   (_, _, n, _) <- DL.getPrevState db
    return n
 
 getFeedUrl :: TweetId -> Feed
@@ -360,5 +360,5 @@ getMaxId ts _ = BL.Types.id_ $ maximum ts
 
 saveFeedStatus :: DL.MyDb -> [Tweet] -> IO ()
 saveFeedStatus db ts = do
-    (oldLastSeenId, oldMaxAvailableId, oldCountNew) <- DL.getPrevState db
+    (oldLastSeenId, oldMaxAvailableId, oldCountNew, _) <- DL.getPrevState db
     DL.write db (getMaxId ts oldMaxAvailableId) (length ts)

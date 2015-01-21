@@ -77,7 +77,7 @@ listenFeedKeys state = do
 
     let keyCodesS = keyEventToKeyCode <$> bodyKeys
 
-    (filterRx ((==) Delete) keyCodesS) ~> f
+    (filterRx ((==) F4) keyCodesS) ~> f
 
     where
     f _ = do

@@ -10,6 +10,7 @@ import Control.Monad (forever)
 import Web.Twitter.Conduit
 import Web.Twitter.Types.Lens
 
+import Data.Time.Clock (diffUTCTime, getCurrentTime, UTCTime(..), secondsToDiffTime)
 import Control.Applicative
 import Control.Lens
 import Control.Monad
@@ -25,7 +26,7 @@ import Web.Authenticate.OAuth
 import qualified Data.ByteString.Char8 as BS
 
 import qualified BL.Core as BLC
-import BL.DataLayer  (MyDb, getPrevState)
+import BL.DataLayer  (MyDb, getPrevState, writeTime)
 import BL.Types
 import qualified Config as CFG
 
@@ -34,7 +35,7 @@ handleIncomingTweets db m ts = BLC.saveFeedStatus db ts >> putMVar m ts
 pollWorker :: MyDb -> MVar [Tweet] -> Int -> IO ThreadId
 pollWorker db m delay = forkIO $ do
     forever $ do
-        (_, oldMaxAvailableId, _) <- getPrevState db
+        (_, oldMaxAvailableId, _, _) <- getPrevState db
         let feedUrl = BLC.getFeedUrl oldMaxAvailableId
 
         print $ "<<<< worker read api " ++ show feedUrl
@@ -46,6 +47,36 @@ pollWorker db m delay = forkIO $ do
             Right ts -> handleIncomingTweets db m ts
 
         threadDelay delay
+
+shouldForceUpdate :: UTCTime -> UTCTime -> Bool
+shouldForceUpdate prev cur =
+  if (diffUTCTime cur prev) < (realToFrac CFG.timeoutThreshod) then False else True
+
+timeoutWorker :: MyDb -> MVar IPCMessage -> IO ThreadId
+timeoutWorker db ch = forkIO $ forever $ do
+  curTime <- getCurrentTime
+  prevTime <- getPrevTimeFromDb db
+  saveCurTimeToDb db curTime
+
+  print $ "... " ++ show prevTime ++ " : " ++ show curTime
+                 ++ " / " ++ show (diffUTCTime curTime prevTime)
+                 ++ " / " ++ show (realToFrac CFG.timeoutThreshod)
+
+  case shouldForceUpdate prevTime curTime of
+    True -> sendUpdateMessage ch
+    _    -> print $ "."
+
+  threadDelay CFG.timeoutWorkerDelay
+
+  where
+  getPrevTimeFromDb db = do
+    (_, _, _, oldPrevTime) <- getPrevState db
+    return oldPrevTime
+
+  saveCurTimeToDb = writeTime
+
+  sendUpdateMessage ch = putMVar ch MReloadFeed
+
 
 streamWorker :: MyDb -> MVar [Tweet] -> IO ThreadId
 streamWorker db m = forkIO $ do

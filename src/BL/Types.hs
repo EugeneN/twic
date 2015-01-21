@@ -17,6 +17,8 @@ type TweetBody = ByteString
 
 data Message = Message Int
 
+data IPCMessage = MReloadFeed | MOther | MNOOP deriving Show
+
 data Feed = UserTimeline Url
           | HomeTimeline Url
           deriving Show

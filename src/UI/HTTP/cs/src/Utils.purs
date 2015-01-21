@@ -162,6 +162,8 @@ data KeyCode = Insert
              | Enter
              | Delete
              | F2
+             | F4
+             | F5
              | UnknownKey Number
 
 keyEventToKeyCode :: forall a. a -> KeyCode -- JQueryEvent a, ReactEvent a =>
@@ -170,6 +172,8 @@ keyEventToKeyCode x | which x == 13  = Enter
                     | which x == 45  = Insert
                     | which x == 46  = Delete
                     | which x == 113 = F2
+                    | which x == 115 = F4
+                    | which x == 116 = F5
 
 keyEventToKeyCode x                  = UnknownKey $ which x
 
@@ -179,6 +183,8 @@ instance eqKeyCode :: Eq KeyCode where
     (==) Enter  Enter  = true
     (==) Delete Delete = true
     (==) F2     F2     = true
+    (==) F4     F4     = true
+    (==) F5     F5     = true
     (==) _      _      = false
 
     (/=) a      b      = not $ (==) a b

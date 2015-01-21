@@ -22,7 +22,7 @@ main = do
     listenWriteKeys
     listenFeedKeys state
 
-    loadFeed state
+    -- loadFeed state
     startWsClient state
 
     pure unit

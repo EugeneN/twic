@@ -312,16 +312,6 @@ bodyCss = do
       marginTop (px 15)
       padding (px 7) (px 11) (px 7) (px 11)
 
-  --".pop" ? do
-  --  display inlineBlock
-  --  transform (translateZ 0)
-  --  boxShadow 0 0 (px 1) (setA 50 baseColor)
-
-  --".pop" # hover # focus # active ? do
-  --  animationName "pop"
-  --  animationDuration (ms 300)
-  --  animationTimingFunction linear
-  --  animationIterationCount (iterationCount 1)
 
 
 usernameCss :: Css

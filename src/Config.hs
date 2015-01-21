@@ -14,3 +14,7 @@ port = 3000 :: Int
 delay = 2 * oneMinute
 
 heartbeatDelay = 15 :: Int -- seconds
+
+timeoutThreshod = 90
+timeoutWorkerDelay = (timeoutThreshod * oneSecond) - oneSecond
+
