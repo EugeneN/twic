@@ -1,11 +1,12 @@
-{-# LANGUAGE OverloadedStrings, NoMonomorphismRestriction #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE OverloadedStrings         #-}
 
 module BL.Parser (parseTweet) where
 
-import           BL.Types                       (TweetElement(..))
-import           Data.Text                      (Text, unpack)
+import           BL.Types         (TweetElement (..))
+import           Data.Text        (Text, unpack)
 import           Text.Parsec
-import           Text.Parsec.Text               (Parser)
+import           Text.Parsec.Text (Parser)
 
 
 

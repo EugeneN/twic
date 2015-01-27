@@ -189,6 +189,11 @@ handleStarClick id_ = do
             renderMessage messagesId "Starred :-)"
             pure unit
 
+
+feedMouseOverHandler ev = do
+    trace "got mouse over"
+    pure unit
+
 processTweetElement :: Entities -> TweetElement -> TweetElement
 processTweetElement (Entities {urls=urls}) (Link u) = case matchUrl u of
     Nothing -> Link u
@@ -273,6 +278,24 @@ instance asHtmlMedia :: AsHtml EntityMedia where
 
 --------------------------------------------------------------------------------
 
+tweetMenu :: ComponentClass { id_str :: String
+                            , author :: Author } {}
+tweetMenu = createClass spec { displayName = "TweetMenu", render = renderFun }
+    where
+    renderFun this = pure $
+        D.span {className: "toolbar-target"} [
+            D.ul {className: "toolbar", id: ("menu-" ++ this.props.id_str)} [
+                D.li { "data-tweet-id": (show this.props.id_str)
+                     , title: "Retweet"
+                     , onClick: handleRetweetClick this.props.id_str} [D.rawText "RT"]
+              , D.li {} [D.a {href: (getOrigTweetUrl this.props.author this.props.id_str)
+                             , target: "_blank"
+                             , title: "View original"} [D.rawText "⌘"]]
+              , D.li {title: "Reply"} [D.rawText "↩"]
+              , D.li { title: "Star"
+                     , onClick: handleStarClick this.props.id_str } [D.rawText "★"]
+              ] ]
+
 tweetComponent :: ComponentClass { text :: [TweetElement]
                                  , created_at :: String
                                  , id :: TweetId
@@ -296,22 +319,10 @@ tweetComponent = createClass spec { displayName = "Tweet" , render = renderFun }
 
         renderFun this = pure $
           D.li {} [ authorToHtml this.props.author this.props.retweeted_by
-                  , D.span {className: "tweet-body"} (asHtml <<< (processTweetElement this.props.entities) <$> this.props.text)
-
-                  , asHtml this.props.entities
-
-                  , D.span {className: "toolbar-target"} [
-                        D.ul {className: "toolbar", id: "menu-" ++ (show this.props.id)} [
-                            D.li { "data-tweet-id": (show this.props.id)
-                                 , title: "Retweet"
-                                 , onClick: handleRetweetClick this.props.id_str} [D.rawText "RT"]
-                          , D.li {} [D.a {href: (getOrigTweetUrl this.props.author this.props.id_str)
-                                         , target: "_blank"
-                                         , title: "View original"} [D.rawText "⌘"]]
-                          , D.li {title: "Reply"} [D.rawText "↩"]
-                          , D.li { title: "Star"
-                                 , onClick: handleStarClick this.props.id_str } [D.rawText "★"]
-                          , D.li {title: "Mark"} [D.rawText "⚑"] ] ] ]
+                  , D.span { className: "tweet-body"
+                           , "data-tweet-id": this.props.id_str
+                           } (asHtml <<< (processTweetElement this.props.entities) <$> this.props.text)
+                  , asHtml this.props.entities ]
 
 
 tweetsList :: ComponentClass {tweets :: [Tweet]} {}
@@ -319,7 +330,9 @@ tweetsList = createClass spec { displayName = "TweetsList", render = renderFun }
     where
         renderFun this = case this.props.tweets of
             [] -> pure $ D.ul {id: "feed"} [D.li { className: "no-tweets" } [D.rawText "No new tweets"]]
-            _  -> pure $ D.ul {id: "feed"} $ asHtml <$> this.props.tweets
+            _  -> pure $ D.ul { id: "feed"
+                              , onMouseOver: feedMouseOverHandler
+                              } $ asHtml <$> this.props.tweets
 
 renderTweets :: forall eff. String -> [Tweet] -> Eff (dom :: DOM, react :: React | eff) Component
 renderTweets targetId ts = renderComponentById (tweetsList {tweets: ts} []) targetId

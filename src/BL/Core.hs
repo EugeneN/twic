@@ -1,4 +1,5 @@
-{-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module BL.Core (
     Url(..)
@@ -30,32 +31,31 @@ module BL.Core (
   , starUrl
   ) where
 
-import           Data.Text                 (Text, pack, unpack)
+import           Data.Text                (Text, pack, unpack)
 
-import           Web.Authenticate.OAuth
 import           System.IO
+import           Web.Authenticate.OAuth
 
+import qualified Data.ByteString          as B
+import qualified Data.ByteString.Char8    as B8
 import           Network.HTTP.Conduit
-import qualified Data.ByteString           as B
-import qualified Data.ByteString.Char8     as B8
 
-import           Control.Exception.Lifted  (try)
+import           Control.Exception.Lifted (try)
 
 import           Control.Applicative
 import           Control.Monad
-import           Network.HTTP.Conduit      (HttpException(..))
-import           Network.HTTP.Types        (Status(..))
-import           Control.Monad.Trans       (liftIO)
+import           Control.Monad.Trans      (liftIO)
+import           Network.HTTP.Types       (Status (..))
 
-import qualified Config                    as CFG
-import           BL.Parser                 (parseTweet)
+import qualified BL.DataLayer             as DL
+import           BL.Parser                (parseTweet)
 import           BL.Types
-import qualified BL.DataLayer              as DL
+import qualified Config                   as CFG
 import           Data.Aeson
-import           GHC.Generics
-import qualified Web.Twitter.Types         as TT
-import           Data.Int                  (Int64)
 import           Data.HashMap.Strict
+import           Data.Int                 (Int64)
+import           GHC.Generics
+import qualified Web.Twitter.Types        as TT
 
 
 myoauth :: OAuth
@@ -68,6 +68,7 @@ mycred :: Credential
 mycred = newCredential (B8.pack CFG.accessToken) (B8.pack CFG.accessTokenSecret)
 
 
+retweetStatusToTweet :: TT.RetweetedStatus -> Tweet
 retweetStatusToTweet s = Tweet (parseTweet $ TT.rsText s)
                                (pack $ TT.rsCreatedAt s)
                                (fromIntegral (TT.rsId s) :: Int64)
@@ -76,6 +77,8 @@ retweetStatusToTweet s = Tweet (parseTweet $ TT.rsText s)
                                (statusEntitiesToEntities $ TT.rsEntities s)
                                (Just $ statusToTweet $ TT.rsRetweetedStatus s)
 
+statusRetweetToRetweet :: Maybe TT.Status -> Maybe Tweet
+statusToTweet :: TT.Status -> Tweet
 statusToTweet s = Tweet (parseTweet $ TT.statusText s)
                         (pack $ TT.statusCreatedAt s)
                         (fromIntegral (TT.statusId s) :: Int64)
@@ -84,6 +87,7 @@ statusToTweet s = Tweet (parseTweet $ TT.statusText s)
                         (statusEntitiesToEntities $ TT.statusEntities s)
                         (statusRetweetToRetweet $ TT.statusRetweetedStatus s)
 
+statusUserToAuthor :: TT.User -> Author
 statusUserToAuthor s = Author (TT.userName s)
                               (TT.userId s)
                               (TT.userScreenName s)
@@ -95,6 +99,7 @@ statusUserToAuthor s = Author (TT.userName s)
             Just y -> unpack y
 
 
+statusEntitiesToEntities :: Maybe TT.Entities -> Entities
 --statusEntitiesToEntities Nothing = ?
 statusEntitiesToEntities (Just s) = BL.Types.Entities (xUrl <$> TT.enURLs s)
                                                       (xHashtag <$> TT.enHashTags s)
@@ -264,11 +269,13 @@ writeApi url = do
         Left (StatusCodeException (Network.HTTP.Types.Status code msg) _ _)  ->
             return $ Left $ ApiError $ "Twitter API returned bad status code: " ++ show code ++ " " ++ show msg
 
+        Left e -> return $ Left $ ApiError $ "Other status exception: " ++ show e
+
         Right r -> case eitherDecode $ responseBody r of
             Left msg -> return $ Left $ ApiError msg
             Right t  -> return $ Right t
 
-readApi :: Feed -> IO (Feed, (Either ApiError [Tweet]))
+readApi :: Feed -> IO (Feed, Either ApiError [Tweet])
 readApi feed = do
   req <- parseUrl $ unfeedUrl feed
   res <- try $ withManager $ \m -> do
@@ -277,12 +284,12 @@ readApi feed = do
 
   case res of
     Left (StatusCodeException (Network.HTTP.Types.Status code msg) _ _) ->
-      return (feed, (Left $ ApiError $ "Twitter API returned bad status code: " ++ show code ++ " " ++ show msg))
+      return (feed, Left $ ApiError $ "Twitter API returned bad status code: " ++ show code ++ " " ++ show msg)
     Left _ ->
-      return (feed, (Left $ ApiError "Http error"))
+      return (feed, Left $ ApiError "Http error")
 
     Right r -> case eitherDecode $ responseBody r of
-      Left msg -> return (feed, (Left $ ApiError msg))
+      Left msg -> return (feed, Left $ ApiError msg)
       Right ts -> return (feed, Right ts)
 
   where
@@ -291,41 +298,41 @@ readApi feed = do
     unfeedUrl (HomeTimeline u) = u
 
 retweetUrl :: TweetId -> Url
-retweetUrl id_ = "https://api.twitter.com/1.1/statuses/retweet/" ++ (show id_) ++ ".json"
+
+retweetUrl x = "https://api.twitter.com/1.1/statuses/retweet/" ++ show x ++ ".json"
 
 starUrl :: TweetId -> Url
-starUrl id_ = "https://api.twitter.com/1.1/favorites/create.json?id=" ++ (show id_)
+starUrl x = "https://api.twitter.com/1.1/favorites/create.json?id=" ++ show x
 
 tweetUrl :: TweetBody -> Url
 tweetUrl status = "https://api.twitter.com/1.1/statuses/update.json?status=" ++ B8.unpack status
 
 userTimeline :: Username -> Int -> Feed
 userTimeline name 0 = UserTimeline $
-  "https://api.twitter.com/1.1/statuses/user_timeline.json?screen_name="++ name
+  "https://api.twitter.com/1.1/statuses/user_timeline.json?screen_name=" ++ name
 userTimeline name count = UserTimeline $
   "https://api.twitter.com/1.1/statuses/user_timeline.json?screen_name="
-  ++ name ++ "&count=" ++ (show count)
+  ++ name ++ "&count=" ++ show count
 
 homeTimeline :: Int -> Feed
-homeTimeline 0 = HomeTimeline $ "https://api.twitter.com/1.1/statuses/home_timeline.json"
+homeTimeline 0 = HomeTimeline "https://api.twitter.com/1.1/statuses/home_timeline.json"
 homeTimeline count = HomeTimeline $
   "https://api.twitter.com/1.1/statuses/home_timeline.json?count=" ++ show count
 
 homeTimelineSince :: TweetId -> Feed
 homeTimelineSince tid = HomeTimeline $
-  "https://api.twitter.com/1.1/statuses/home_timeline.json?since_id="
-  ++ (show tid)
+  "https://api.twitter.com/1.1/statuses/home_timeline.json?since_id=" ++ show tid
 
 homeTimelineSinceCount :: TweetId -> Int -> Feed
-homeTimelineSinceCount 0 0 = HomeTimeline $
-  "https://api.twitter.com/1.1/statuses/home_timeline.json"
+homeTimelineSinceCount 0 0 = HomeTimeline "https://api.twitter.com/1.1/statuses/home_timeline.json"
+
 homeTimelineSinceCount tid 0 = HomeTimeline $
   "https://api.twitter.com/1.1/statuses/home_timeline.json?since_id=" ++ show tid
 homeTimelineSinceCount 0 count = HomeTimeline $
   "https://api.twitter.com/1.1/statuses/home_timeline.json?count=" ++ show count
 homeTimelineSinceCount tid count = HomeTimeline $
   "https://api.twitter.com/1.1/statuses/home_timeline.json?since_id="
-  ++ (show tid) ++ "&count=" ++ (show count)
+  ++ show tid ++ "&count=" ++ show count
 
 
 getCachedFeed :: DL.MyDb -> Int -> IO Feed
@@ -343,7 +350,7 @@ getCachedFeed db _ = do
       return $ Just x
 
 getHomeFeed :: DL.MyDb -> Int -> IO Feed
-getHomeFeed db n = do return $ homeTimeline n
+getHomeFeed _ n = return $ homeTimeline n
 
 getUnreadCount :: DL.MyDb -> IO Int
 getUnreadCount db = do
@@ -351,8 +358,8 @@ getUnreadCount db = do
    return n
 
 getFeedUrl :: TweetId -> Feed
-getFeedUrl x | x == 0 = homeTimeline 0
 getFeedUrl x | x > 0 = homeTimelineSince x
+getFeedUrl _         = homeTimeline 0
 
 getMaxId :: [Tweet] -> TweetId -> TweetId
 getMaxId [] oldMaxAvailableId = oldMaxAvailableId
@@ -360,5 +367,5 @@ getMaxId ts _ = BL.Types.id_ $ maximum ts
 
 saveFeedStatus :: DL.MyDb -> [Tweet] -> IO ()
 saveFeedStatus db ts = do
-    (oldLastSeenId, oldMaxAvailableId, oldCountNew, _) <- DL.getPrevState db
+    (_, oldMaxAvailableId, _, _) <- DL.getPrevState db
     DL.write db (getMaxId ts oldMaxAvailableId) (length ts)

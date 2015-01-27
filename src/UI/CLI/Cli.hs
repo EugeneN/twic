@@ -1,34 +1,44 @@
-{-# LANGUAGE OverloadedStrings, PatternGuards #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternGuards     #-}
 
 module UI.CLI.Cli (
-  Args(..), parseArgs
+  Args(..), parseArgs, cliClientWorker
   ) where
 
-import           System.Environment            (getArgs)
-import           BL.Core                       (Username(..), Tweet(..), Author(..))
-import           Control.Monad                 (mapM_)
-import           Data.Text                     (unpack)
+import           BL.Core            (Author (..), Tweet (..), Username (..))
+import           Data.Text          (unpack)
+import           System.Environment (getArgs)
+
+import           Control.Concurrent (MVar, ThreadId, forkIO, killThread,
+                                     newEmptyMVar, newMVar, putMVar, readMVar,
+                                     swapMVar, takeMVar, tryPutMVar)
+import           Control.Monad      (forever, mapM_)
+import           Data.Functor       ((<$>))
 
 type Action = String
 
-data Args = Args { action  :: Action
-                 , count   :: Int
+data Args = Args { action :: Action
+                 , count  :: Int
                  } deriving Show
 
 showTweet :: Tweet -> String
 showTweet (Tweet body created id id_str (Author username aid screen_name hasAvatar avatarUrl) _ _) =
-  "- " ++ (show id) ++ " " ++ (unpack username) ++ ": " ++ (show body)
+  "- " ++ show id ++ " " ++ unpack username ++ ": " ++ show body
 
 parseArgs :: IO (Maybe Args)
 parseArgs = do
   args <- getArgs
 
   case args of
-    [action, countStr] | [(count,_)] <- reads countStr -> do
+    [action, countStr] | [(count,_)] <- reads countStr ->
       return $ Just $ Args action count
 
     _ -> return Nothing
 
+
+cliClientWorker :: MVar [Tweet] -> IO ThreadId
+cliClientWorker fv = forkIO $ forever $
+    takeMVar fv >>= (print . show)
 
 printTweets :: String -> [Tweet] -> IO ()
 printTweets feedName ts = do
@@ -37,11 +47,11 @@ printTweets feedName ts = do
   case ts of
     [] -> putStrLn "No new tweets"
     _  -> do
-      putStrLn $ (show $ length ts) ++ " new tweets"
+      putStrLn $ show (length ts) ++ " new tweets"
       mapM_ (putStrLn . showTweet) ts
 
   putStrLn ""
 
   where
     underline :: String -> String
-    underline p = foldl (++) "" (take (length feedName) $ repeat "=")
+    underline p = foldl (++) "" (replicate (length feedName) "=")

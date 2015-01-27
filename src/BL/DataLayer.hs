@@ -1,19 +1,24 @@
-{-# LANGUAGE DeriveDataTypeable, FlexibleContexts,
-  GeneralizedNewtypeDeriving, MultiParamTypeClasses,
-  TemplateHaskell, TypeFamilies, RecordWildCards #-}
+{-# LANGUAGE DeriveDataTypeable         #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE TypeFamilies               #-}
 
 module BL.DataLayer where
 
 import           Data.Acid
 import           Data.Acid.Advanced
 
+import           BL.Types
 import           Control.Applicative  ((<$>), (<*>))
 import           Control.Monad.Reader (ask)
 import           Control.Monad.State  (get, put)
 import           Data.SafeCopy
-import           BL.Types
+import           Data.Time.Clock      (UTCTime (..), diffUTCTime,
+                                       getCurrentTime)
 import           Prelude              hiding (id)
-import Data.Time.Clock (diffUTCTime, getCurrentTime, UTCTime(..))
 
 
 data Store = Store { lastSeenId     :: TweetId

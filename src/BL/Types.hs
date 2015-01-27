@@ -1,14 +1,15 @@
-{-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module BL.Types where
 
-import           Data.Text              (Text)
-import           Data.Aeson
-import           GHC.Generics
 import           Control.Applicative
 import           Control.Monad
-import           Data.Int               (Int64)
+import           Data.Aeson
 import           Data.ByteString
+import           Data.Int            (Int64)
+import           Data.Text           (Text)
+import           GHC.Generics
 
 type Url = String
 type Username = String
@@ -65,8 +66,8 @@ data EntityMedia = EntityMedia { mType        :: String
                                , mSizes       :: EntityMediaSizes
                                } deriving (Show)
 
-data EntityMediaSize = EntityMediaSize { h :: Int
-                                       , w :: Int
+data EntityMediaSize = EntityMediaSize { h      :: Int
+                                       , w      :: Int
                                        , resize :: String
                                        } deriving (Show, Generic)
 
@@ -76,19 +77,19 @@ data EntityMediaSizes = EntityMediaSizes { thumb  :: EntityMediaSize
                                          , small  :: EntityMediaSize
                                          } deriving (Show, Generic)
 
-data Author = Author { name                     :: Text
-                     , authorId                 :: Integer
-                     , screen_name              :: Text
-                     , default_profile_image    :: Bool
-                     , profile_image_url        :: Url
+data Author = Author { name                  :: Text
+                     , authorId              :: Integer
+                     , screen_name           :: Text
+                     , default_profile_image :: Bool
+                     , profile_image_url     :: Url
                      } deriving (Show, Eq, Ord)
 
-data JsonApiError = JsonApiError { errTitle    :: Text
-                                 , errMessage  :: Text
+data JsonApiError = JsonApiError { errTitle   :: Text
+                                 , errMessage :: Text
                                  } deriving (Show, Generic)
 
-data JsonResponse = JsonResponse { okTitle    :: Text
-                                 , okTweets   :: [Tweet]
+data JsonResponse = JsonResponse { okTitle  :: Text
+                                 , okTweets :: [Tweet]
                                  } deriving (Show, Generic)
 
 data ApiError = ApiError String deriving Show

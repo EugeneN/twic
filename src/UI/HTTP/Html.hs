@@ -2,24 +2,26 @@
 
 module UI.HTTP.Html where
 
-import           Text.Blaze.Html5              (Html, docTypeHtml, toHtml, (!), body, ul,
-                                                style, title, li, img, a, meta, pre, link)
-import qualified Text.Blaze.Html5              as H
-import           Text.Blaze.Html5.Attributes   (class_, src, href, charset, target, rel)
-import qualified Text.Blaze.Html5.Attributes   as A
-import           Text.Blaze                    (toValue)
-import           Data.Text                     (Text, pack, unpack, append)
-import qualified Data.Text                     as T
-import           Data.List.Split               (splitOn)
+import           Data.List.Split             (splitOn)
+import           Data.Text                   (Text, append, pack, unpack)
+import qualified Data.Text                   as T
+import           Text.Blaze                  (toValue)
+import           Text.Blaze.Html5            (Html, a, body, docTypeHtml, img,
+                                              li, link, meta, pre, style, title,
+                                              toHtml, ul, (!))
+import qualified Text.Blaze.Html5            as H
+import           Text.Blaze.Html5.Attributes (charset, class_, href, rel, src,
+                                              target)
+import qualified Text.Blaze.Html5.Attributes as A
 
-import           Data.Monoid                   ((<>), mconcat, mempty)
-import           Data.Functor                  ((<$>))
-import           Control.Monad                 (forM_)
+import           Control.Monad               (forM_)
+import           Data.Functor                ((<$>))
+import           Data.Monoid                 (mconcat, mempty, (<>))
 
 import           BL.Core
-import qualified UI.HTTP.Css                   as CSS
+import qualified UI.HTTP.Css                 as CSS
 
-import           Debug.Trace                   (trace)
+import           Debug.Trace                 (trace)
 
 
 
@@ -39,7 +41,7 @@ instance AsHtml TweetElement where
                               ! href (toValue u)
                               ! target "_blank" $ toHtml $ chomp u
     where
-      chomp = T.unpack . T.takeWhile (\c -> c /= '/') . T.pack
+      chomp = T.unpack . T.takeWhile (/= '/') . T.pack
 
   asHtml (PlainText t)  = H.span ! class_ "text-tag" $ H.preEscapedToHtml t -- XXX
   asHtml (Hashtag h)    = H.span ! class_ "hash-tag" $
@@ -51,10 +53,10 @@ instance AsHtml TweetElement where
   asHtml (Unparsable t) = H.span ! class_ "unparsable" $ H.preEscapedToHtml t
 
 instance AsHtml EntityMedia where
-  asHtml (EntityMedia type_ _ _ mediaUrl _ _ _) = case type_ of
-    "photo" -> img ! class_ "inline-img" ! src (toValue mediaUrl)
-    x -> div_ ! class_ "unknown-media" $ toHtml ("Unknown media type: " ++ x)
-  asHtml _ = ""
+  asHtml (EntityMedia type_ _ _ mediaUrl _ _ _) | type_ == "photo"
+    = img ! class_ "inline-img" ! src (toValue mediaUrl)
+  asHtml (EntityMedia type_ _ _ _ _ _ _)
+    = div_ ! class_ "unknown-media" $ toHtml ("Unknown media type: " ++ type_)
 
 instance AsHtml Tweet where
   asHtml (Tweet body created id_ id_str (Author username authorId screen_name hasAvatar avatarUrl) entities retweet) = do
@@ -66,7 +68,7 @@ instance AsHtml Tweet where
     span_ ! class_ "tweet-body" $ formatBody body
 
     span_ ! class_ "toolbar-target" $
-        ul ! class_ "toolbar" ! A.id (toValue $ "menu-" ++ (show id_)) $ do
+        ul ! class_ "toolbar" ! A.id (toValue $ "menu-" ++ show id_) $ do
             li ! H.customAttribute "data-tweet-id" (toValue id_)
                ! A.onclick (toValue ("PS.Main.handleRetweetButton(this)()" :: String)) $ "RETWEET"
             li "REPLAY"
@@ -87,17 +89,17 @@ instance AsHtml Tweet where
 
           urlEntities         = urls entities
           processElement el   = case el of
-            Link url -> case (matchUrl url) of
+            Link url -> case matchUrl url of
               Nothing -> Link url
               Just (EntityUrl expandedUrl _ _ _) -> toLink $ splitOn "://" expandedUrl
                 where
-                    toLink (x:y:[]) = Link $ x ++ "://" ++ y
+                    toLink [x,y] = Link $ x ++ "://" ++ y
                     toLink _ = Link url
 
             x -> x
 
             where
-              matchUrl url = case (filterResult url) of
+              matchUrl url = case filterResult url of
                 [x] -> Just x
                 _   -> Nothing
 
@@ -121,8 +123,8 @@ htmlPage title_ body_ error_ = docTypeHtml $ do
 
     case title_ of
       Nothing -> ""
-      Just t  -> title $ t
-    style $ toHtml $ CSS.allCss
+      Just t  -> title t
+    style $ toHtml CSS.allCss
 
   body $ do
     div_ ! class_ "error" ! A.id "messages" $ case error_ of
@@ -131,14 +133,14 @@ htmlPage title_ body_ error_ = docTypeHtml $ do
 
     div_ ! A.id "load-history-container-id" $ mempty
 
-    div_ ! class_ "container" ! A.id "container" $ do
+    div_ ! class_ "container" ! A.id "container" $
       case body_ of
           Nothing -> ""
-          Just b -> ul ! A.id "feed" $ do b
+          Just b -> ul ! A.id "feed" $ b
 
     div_ ! A.id "write-tweet-container-id" $ mempty
 
-    div_ ! class_ "refresh" ! A.id "refresh" $ do
+    div_ ! class_ "refresh" ! A.id "refresh" $
       H.button ! class_ "no-new-tweets pop"
                ! A.id "load-new-tweets-id"
                $ "0"
@@ -160,7 +162,7 @@ tweetsToHtml :: Either ApiError [Tweet] -> Html
 tweetsToHtml (Left exp) = htmlPage (Just "* Error loading tweets") Nothing (Just $ asHtml exp)
 tweetsToHtml (Right ts) = htmlPage title_ body_ err_
   where
-    title_ = Just $ toHtml $ (show $ length ts) ++ " new tweets"
+    title_ = Just $ toHtml $ show (length ts) ++ " new tweets"
     body_ = Just $ case ts of
              [] -> li ! class_ "no-tweets" $ "No new tweets"
              _  -> forM_ (reverse ts) (li . asHtml)

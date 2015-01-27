@@ -7,7 +7,7 @@ import Config
 import Types
 import Utils
 import Core
-import UI.Feed (loadFeed, startWsClient, listenFeedKeys)
+import UI.Feed (loadFeed, startWsClient, listenFeedKeys, loadTweetsFromState)
 import UI.LoaderIndicator (showLoader, hideLoader)
 import UI.Messages (renderMessage)
 import UI.TweetWriter (listenWriteKeys)
@@ -22,7 +22,7 @@ main = do
     listenWriteKeys
     listenFeedKeys state
 
-    -- loadFeed state
+    loadTweetsFromState state
     startWsClient state
 
     pure unit

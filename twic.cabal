@@ -50,4 +50,17 @@ Executable twic
     , mtl
     , acid-state
     , safecopy
+    , websockets
+    , wai-websockets
+    , twitter-conduit         >= 0.1.0
+    , aeson-lens
+    , twitter-types-lens
+    , lens
+    , lens-action
+    , conduit-extra
+    , conduit
+    , twitter-types
+    , unordered-containers
+    , uuid
+    , time
 

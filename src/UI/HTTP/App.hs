@@ -2,41 +2,47 @@
 
 module UI.HTTP.App where
 
+import           BL.Core                        (getCachedFeed, getUnreadCount,
+                                                 readApi, retweetUrl, starUrl,
+                                                 tweetUrl, writeApi)
+import           BL.DataLayer                   (MyDb)
+import           BL.Types                       (Message (..), Tweet, TweetBody,
+                                                 TweetId)
+import           Blaze.ByteString.Builder       (Builder, fromByteString)
+import           Config                         (heartbeatDelay)
+import           Control.Applicative            ((<$>))
+import           Control.Concurrent             (MVar, ThreadId, forkIO,
+                                                 killThread, modifyMVar,
+                                                 modifyMVar_, myThreadId,
+                                                 newMVar, readMVar, takeMVar,
+                                                 threadDelay)
+import           Control.Exception              (fromException, handle)
+import           Control.Monad                  (forM_, forever)
 import           Control.Monad.IO.Class
-import           Control.Monad                 (forever, forM_)
-import           Control.Exception             (fromException, handle)
-import           Control.Concurrent            ( MVar, newMVar, modifyMVar_
-                                               , takeMVar, modifyMVar, readMVar
-                                               , forkIO, threadDelay, killThread
-                                               , myThreadId, ThreadId)
-import           Network.Wai                   ( responseStream, Application, pathInfo
-                                               , responseLBS, responseFile, queryString)
-import           Network.HTTP.Types            (status200, HeaderName)
-import           Network.HTTP.Types.Header     (ResponseHeaders)
-import qualified Network.WebSockets            as WS
-import qualified Network.Wai.Handler.WebSockets as WaiWS
-import           Blaze.ByteString.Builder      (Builder, fromByteString)
-import           Text.Blaze.Html.Renderer.Utf8 (renderHtmlBuilder)
+import           Data.Aeson                     (encode)
 import           Data.ByteString
-import qualified Data.ByteString.Char8         as B8
-import qualified Data.ByteString.Lazy          as BSL
-import           Data.Int                      (Int64)
-import qualified Data.Text                     as T
-import           Data.Text                     (Text)
-import           UI.HTTP.Json                  ( justTweetsToJson, justUnreadCountToJson
-                                               , retweetToJson, starToJson, tweetToJson)
-import           UI.HTTP.Html                  ( tweetsToHtml, retweetToHtml
-                                               , justTweetsToHtml, homePage)
-import           BL.Core                       ( getCachedFeed, readApi, writeApi
-                                               , retweetUrl, starUrl, tweetUrl, getUnreadCount)
-import           BL.Types                      (TweetId, Message(..), Tweet, TweetBody)
-import           BL.DataLayer                  (MyDb)
-import           Config                        (heartbeatDelay)
-import           Data.Aeson                    (encode)
-import           Control.Applicative           ((<$>))
+import qualified Data.ByteString.Char8          as B8
+import qualified Data.ByteString.Lazy           as BSL
+import           Data.Int                       (Int64)
+import           Data.Text                      (Text)
+import qualified Data.Text                      as T
 import           Data.Tuple
-import           Data.UUID.V4                  (nextRandom)
-import           Data.UUID                     (UUID)
+import           Data.UUID                      (UUID)
+import           Data.UUID.V4                   (nextRandom)
+import           Network.HTTP.Types             (HeaderName, status200)
+import           Network.HTTP.Types.Header      (ResponseHeaders)
+import           Network.Wai                    (Application, pathInfo,
+                                                 queryString, responseFile,
+                                                 responseLBS, responseStream)
+import qualified Network.Wai.Handler.WebSockets as WaiWS
+import qualified Network.WebSockets             as WS
+import           Text.Blaze.Html.Renderer.Utf8  (renderHtmlBuilder)
+import           UI.HTTP.Html                   (homePage, justTweetsToHtml,
+                                                 retweetToHtml, tweetsToHtml)
+import           UI.HTTP.Json                   (justTweetsToJson,
+                                                 justUnreadCountToJson,
+                                                 retweetToJson, starToJson,
+                                                 tweetToJson)
 
 --import qualified Network.Wai.Application.Static as Static
 --import Data.FileEmbed (embedDir)
@@ -46,6 +52,7 @@ type Client    = (UUID, WS.Connection)
 type WSState   = [Client]
 type FeedState = [Tweet]
 
+mimeHtml :: (HeaderName, ByteString)
 mimeHtml = ("Content-Type", "text/html")
 mimeText = ("Content-Type", "text/plain")
 mimeJs   = ("Content-Type", "text/javascript")
@@ -73,8 +80,8 @@ httpapp db count request sendResponse = do
     ["star"]            -> starHandler count request sendResponse
     ["star", _]         -> starHandler count request sendResponse
 
-    ["tweet"]            -> tweetHandler count request sendResponse
-    ["tweet", _]         -> tweetHandler count request sendResponse
+    ["tweet"]           -> tweetHandler count request sendResponse
+    ["tweet", _]        -> tweetHandler count request sendResponse
 
     path                -> notFoundHandler count request sendResponse
 
@@ -90,15 +97,16 @@ removeClient client = Prelude.filter ((/= fst client) . fst)
 broadcast :: BSL.ByteString -> WSState -> IO ()
 broadcast msg clients = forM_ clients $ \(_, conn) -> WS.sendTextData conn msg
 
+app :: MyDb -> MVar FeedState -> Int -> IO Application
 app db m count = do
     cs <- newMVar ([] :: WSState)
-    startBroadcastWorker m cs
+    _ <- startBroadcastWorker m cs
     return $ WaiWS.websocketsOr WS.defaultConnectionOptions
                                 (wsapp m cs)
                                 (httpapp db count)
 
 wsapp :: MVar FeedState -> MVar WSState -> WS.ServerApp
-wsapp m cs pending = do
+wsapp _ cs pending = do
   conn <- WS.acceptRequest pending
   clientId <- nextRandom
   let client = makeClient clientId conn

@@ -3,7 +3,7 @@
 module UI.HTTP.Css where
 
 import           Clay
-import qualified Clay as C
+import qualified Clay        as C
 import           Data.Monoid ((<>))
 
 entityColor = "#2FC2EF" :: Color

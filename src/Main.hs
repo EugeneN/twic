@@ -1,27 +1,34 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes        #-}
 
 module Main where
 
+import qualified BL.Core                  as BLC
+import           BL.DataLayer             (MyDb, getPrevState, openDb)
+
+import           BL.Types                 (IPCMessage (..), Tweet (..))
+import           BL.Worker                (handleIncomingTweets, streamWorker,
+                                           timeoutWorker)
+import           Config                   (port)
+
 import           Network.Wai
 import           Network.Wai.Handler.Warp (run)
-import           UI.CLI.Cli               (parseArgs, Args(..))
+import           UI.CLI.Cli               (Args (..), cliClientWorker,
+                                           parseArgs)
 import           UI.HTTP.App              (app)
-import           BL.DataLayer             (openDb, getPrevState, MyDb)
-import           BL.Worker                (pollWorker, streamWorker, timeoutWorker, handleIncomingTweets)
-import           BL.Types                 (Message(..), Tweet(..), IPCMessage(..))
-import           Config                   (port, delay)
-import qualified BL.Core                  as BLC
 
-import           Control.Concurrent       ( MVar, swapMVar, tryPutMVar, newEmptyMVar, newMVar, readMVar, takeMVar, putMVar
-                                          , ThreadId, forkIO, killThread)
-import           Control.Monad (forever)
+import           Control.Concurrent       (MVar, ThreadId, forkIO, killThread,
+                                           newEmptyMVar, newMVar, putMVar,
+                                           readMVar, swapMVar, takeMVar,
+                                           tryPutMVar)
+import           Control.Monad            (forever)
 
-usage = "Usage: <me> serve|dump tweets-count"
+usage = "Usage: <me> serve | cli | dump tweets-count"
 
 data AppState = RunState { db              :: MyDb
                          , timeoutWorkerId :: Maybe ThreadId
                          , streamWorkerId  :: Maybe ThreadId
-                         , httpWorkerId    :: Maybe ThreadId
+                         , uiWorkerId      :: Maybe ThreadId
                          , feedVar         :: MVar [Tweet]
                          , appBusVar       :: MVar IPCMessage
                          } -- deriving Show
@@ -29,6 +36,7 @@ data AppState = RunState { db              :: MyDb
 httpWorker :: Application -> IO ThreadId
 httpWorker app =  forkIO $ run port app
 
+runManager :: forall b. MVar AppState -> IO b
 runManager = monitorAppBus
     where
     monitorAppBus rs = forever $ do
@@ -41,10 +49,10 @@ runManager = monitorAppBus
                 updateFeed rs
 
             MNOOP ->
-                print $ "Monitor: NOOP"
+                print "Monitor: NOOP"
 
             _ ->
-                print $ "Unknown command: " -- ++ show cmd
+                print "Unknown command: " -- ++ show cmd
 
     restartStreamWorker rs = do
         (RunState db twi maybeSwi hwi fv av) <- readMVar rs
@@ -72,31 +80,45 @@ runManager = monitorAppBus
             Right ts -> handleIncomingTweets db fv (reverse ts)
             Left err -> print $ "error" ++ show err
 
-
 handleAction :: String -> MVar AppState -> Int -> IO ()
 handleAction "serve" rs count = do
     (RunState db _ _ _ fv av) <- readMVar rs
 
-    putStrLn $ "Starting a timeoutWorker"
-    timeoutWorkerId <- timeoutWorker db av
+    putStrLn "Starting a timeoutWorker"
+    twid <- timeoutWorker db av
 
-    putStrLn $ "Starting a streamWorker"
-    streamWorkerId <- streamWorker db fv
+    putStrLn "Starting a streamWorker"
+    swid <- streamWorker db fv
 
     putStrLn $ "Listening on port " ++ show port
     app_ <- app db fv count
-    httpWorkerId <- httpWorker app_
+    hwid <- httpWorker app_
 
-    swapMVar rs (RunState db (Just timeoutWorkerId) (Just streamWorkerId) (Just httpWorkerId) fv av)
+    swapMVar rs (RunState db (Just twid) (Just swid) (Just hwid) fv av)
+
+    runManager rs
+
+handleAction "cli" rs count = do
+    (RunState db _ _ _ fv av) <- readMVar rs
+
+    putStrLn "Starting a timeoutWorker"
+    twid <- timeoutWorker db av
+
+    putStrLn "Starting a streamWorker"
+    swid <- streamWorker db fv
+
+    putStrLn "Starting CLI client"
+    cwid <- cliClientWorker fv
+
+    _ <- swapMVar rs (RunState db (Just twid) (Just swid) (Just cwid) fv av)
 
     runManager rs
 
 handleAction "dump" rs _ = do
     (RunState db _ _ _ _ _) <- readMVar rs
-    putStrLn $ "Store dump:"
-
     (lastSeen, maxAvailableId, countNew, prevTime) <- getPrevState db
 
+    putStrLn "Store dump:"
     putStrLn $ "last seen id: " ++ show lastSeen
              ++ "\nmax available id: " ++ show maxAvailableId
              ++ "\ncount new: " ++ show countNew

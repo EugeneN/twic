@@ -1,56 +1,59 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE PatternGuards     #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module BL.Worker where
 
-import Control.Concurrent
-import Control.Monad (forever)
+import           Control.Concurrent
 
-import Web.Twitter.Conduit
-import Web.Twitter.Types.Lens
+import           Web.Twitter.Conduit
+import           Web.Twitter.Types.Lens
 
-import Data.Time.Clock (diffUTCTime, getCurrentTime, UTCTime(..), secondsToDiffTime)
-import Control.Applicative
-import Control.Lens
-import Control.Monad
-import Control.Monad.IO.Class
-import Data.Conduit
-import qualified Data.Conduit as C
-import qualified Data.Conduit.Binary as CB
-import qualified Data.Conduit.List as CL
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import Network.HTTP.Conduit as HTTP
-import Web.Authenticate.OAuth
-import qualified Data.ByteString.Char8 as BS
+import           Control.Applicative
+import           Control.Lens
 
-import qualified BL.Core as BLC
-import BL.DataLayer  (MyDb, getPrevState, writeTime)
-import BL.Types
-import qualified Config as CFG
+import           Control.Lens.Action    (act, (^!))
 
+import           Control.Monad
+import           Control.Monad.IO.Class
+import qualified Data.ByteString.Char8  as BS
+import           Data.Conduit
+import qualified Data.Conduit           as C
+import qualified Data.Conduit.Binary    as CB
+import qualified Data.Conduit.List      as CL
+import qualified Data.Text              as T
+import qualified Data.Text.IO           as T
+import           Data.Time.Clock        (UTCTime (..), diffUTCTime,
+                                         getCurrentTime, secondsToDiffTime)
+import           Network.HTTP.Conduit   as HTTP
+import           Web.Authenticate.OAuth
+
+import qualified BL.Core                as BLC
+import           BL.DataLayer           (MyDb, getPrevState, writeTime)
+import           BL.Types
+import qualified Config                 as CFG
+
+handleIncomingTweets :: MyDb -> MVar [Tweet] -> [Tweet] -> IO ()
 handleIncomingTweets db m ts = BLC.saveFeedStatus db ts >> putMVar m ts
 
 pollWorker :: MyDb -> MVar [Tweet] -> Int -> IO ThreadId
-pollWorker db m delay = forkIO $ do
-    forever $ do
-        (_, oldMaxAvailableId, _, _) <- getPrevState db
-        let feedUrl = BLC.getFeedUrl oldMaxAvailableId
+pollWorker db m delay = forkIO $ forever $ do
+    (_, oldMaxAvailableId, _, _) <- getPrevState db
+    let feedUrl = BLC.getFeedUrl oldMaxAvailableId
 
-        print $ "<<<< worker read api " ++ show feedUrl
+    print $ "<<<< worker read api " ++ show feedUrl
 
-        (feed, res) <- BLC.readApi feedUrl
+    (_, res) <- BLC.readApi feedUrl
 
-        case res of
-            Left err -> print $ show err
-            Right ts -> handleIncomingTweets db m ts
+    case res of
+        Left err -> print $ show err
+        Right ts -> handleIncomingTweets db m ts
 
-        threadDelay delay
+    threadDelay delay
 
 shouldForceUpdate :: UTCTime -> UTCTime -> Bool
 shouldForceUpdate prev cur =
-  if (diffUTCTime cur prev) < (realToFrac CFG.timeoutThreshod) then False else True
+  diffUTCTime cur prev < realToFrac CFG.timeoutThreshod
 
 timeoutWorker :: MyDb -> MVar IPCMessage -> IO ThreadId
 timeoutWorker db ch = forkIO $ forever $ do
@@ -62,9 +65,9 @@ timeoutWorker db ch = forkIO $ forever $ do
                  ++ " / " ++ show (diffUTCTime curTime prevTime)
                  ++ " / " ++ show (realToFrac CFG.timeoutThreshod)
 
-  case shouldForceUpdate prevTime curTime of
-    True -> sendUpdateMessage ch
-    _    -> print $ "."
+  if shouldForceUpdate prevTime curTime
+    then sendUpdateMessage ch
+    else print "."
 
   threadDelay CFG.timeoutWorkerDelay
 
@@ -79,7 +82,7 @@ timeoutWorker db ch = forkIO $ forever $ do
 
 
 streamWorker :: MyDb -> MVar [Tweet] -> IO ThreadId
-streamWorker db m = forkIO $ do
+streamWorker db m = forkIO $
   withManager$ \mgr -> do
     src <- stream twInfo mgr userstream
     src C.$$+- CL.mapM_ (^! act (liftIO . handleTL))
