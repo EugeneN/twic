@@ -63,4 +63,6 @@ Executable twic
     , unordered-containers
     , uuid
     , time
+    , hslogger
+    , unix
 

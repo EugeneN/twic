@@ -5,6 +5,7 @@ module.exports = function(grunt) {
   grunt.initConfig({
 
       srcFiles: ["src/**/*.purs", "bower_components/**/src/**/*.purs"]
+    , justSrcFiles: ["src/**/*.purs"]
 
     , dotPsci: ["<%=srcFiles%>"]
 
@@ -41,6 +42,10 @@ module.exports = function(grunt) {
               src: ["<%=srcFiles%>"]
             , dest: "../../../../dist/cs/App.js"
           }
+        , just: {
+              src: ["<%=justSrcFiles%>"]
+            , dest: "../../../../dist/cs/justApp.js"
+          }
       }
 
     , pscMake: {
@@ -51,6 +56,10 @@ module.exports = function(grunt) {
       , all: {
           src: ["<%=srcFiles%>"]
         , dest: "../../../../dist/cs/cjs/"
+      }
+      , just: {
+          src: ["<%=justSrcFiles%>"]
+          , dest: "../../../../dist/cs/cjsJustApp.js"
       }
     }
   });

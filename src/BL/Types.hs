@@ -1,9 +1,11 @@
 {-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module BL.Types where
 
 import           Control.Applicative
+import           Control.Concurrent  (MVar, ThreadId)
 import           Control.Monad
 import           Data.Aeson
 import           Data.ByteString
@@ -19,6 +21,20 @@ type TweetBody = ByteString
 data Message = Message Int
 
 data IPCMessage = MReloadFeed | MOther | MNOOP deriving Show
+
+instance Show (MVar IPCMessage)
+instance Show (MVar [Tweet])
+
+makeAppState :: a -> Maybe ThreadId -> Maybe ThreadId -> Maybe ThreadId -> MVar [Tweet] -> MVar IPCMessage -> AppState a
+makeAppState db x y z fv av = RunState db x y z fv av
+
+data AppState a = RunState { db              :: a
+                           , timeoutWorkerId :: Maybe ThreadId
+                           , streamWorkerId  :: Maybe ThreadId
+                           , uiWorkerId      :: Maybe ThreadId
+                           , feedVar         :: MVar [Tweet]
+                           , appBusVar       :: MVar IPCMessage
+                           } deriving Show
 
 data Feed = UserTimeline Url
           | HomeTimeline Url

@@ -5,14 +5,14 @@ module UI.CLI.Cli (
   Args(..), parseArgs, cliClientWorker
   ) where
 
-import           BL.Core            (Author (..), Tweet (..), Username (..))
+import           BL.Core            (Author (..), Tweet (..), Username)
+import           Control.Monad      (forever, mapM_)
 import           Data.Text          (unpack)
 import           System.Environment (getArgs)
 
 import           Control.Concurrent (MVar, ThreadId, forkIO, killThread,
                                      newEmptyMVar, newMVar, putMVar, readMVar,
                                      swapMVar, takeMVar, tryPutMVar)
-import           Control.Monad      (forever, mapM_)
 import           Data.Functor       ((<$>))
 
 type Action = String

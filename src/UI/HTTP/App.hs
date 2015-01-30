@@ -2,8 +2,7 @@
 
 module UI.HTTP.App where
 
-import           BL.Core                        (getCachedFeed, getUnreadCount,
-                                                 readApi, retweetUrl, starUrl,
+import           BL.Core                        (readApi, retweetUrl, starUrl,
                                                  tweetUrl, writeApi)
 import           BL.DataLayer                   (MyDb)
 import           BL.Types                       (Message (..), Tweet, TweetBody,
@@ -36,6 +35,9 @@ import           Network.Wai                    (Application, pathInfo,
                                                  responseLBS, responseStream)
 import qualified Network.Wai.Handler.WebSockets as WaiWS
 import qualified Network.WebSockets             as WS
+import           Prelude                        hiding (error)
+import           System.Log.Handler.Simple
+import           System.Log.Logger
 import           Text.Blaze.Html.Renderer.Utf8  (renderHtmlBuilder)
 import           UI.HTTP.Html                   (homePage, justTweetsToHtml,
                                                  retweetToHtml, tweetsToHtml)
@@ -43,6 +45,14 @@ import           UI.HTTP.Json                   (justTweetsToJson,
                                                  justUnreadCountToJson,
                                                  retweetToJson, starToJson,
                                                  tweetToJson)
+
+
+logRealm = "HttpApp"
+
+info = infoM logRealm
+warn = warningM logRealm
+debug = debugM logRealm
+error = errorM logRealm
 
 --import qualified Network.Wai.Application.Static as Static
 --import Data.FileEmbed (embedDir)
@@ -61,18 +71,12 @@ mimeIco  = ("Content-Type", "image/x-icon")
 
 httpapp :: MyDb -> Int -> Application -- = Request -> ResourceT IO Response
 httpapp db count request sendResponse = do
-  print $ pathInfo request
+  debug $ show $ pathInfo request
   case pathInfo request of
     []                  -> homeHandler count request sendResponse
 
     ["cs", "Main.js"]   -> staticHandler [mimeJs] "dist/cs/Main.js" request sendResponse
     ["favicon.ico"]     -> staticHandler [mimeIco] "res/favicon.ico" request sendResponse
-
-    ["update"]          -> updateHandler db count request sendResponse
-    ["update", _]       -> updateHandler db count request sendResponse
-
-    ["check"]           -> checkHandler db count request sendResponse
-    ["check", _]        -> checkHandler db count request sendResponse
 
     ["retweet"]         -> retweetHandler count request sendResponse
     ["retweet", _]      -> retweetHandler count request sendResponse
@@ -111,7 +115,7 @@ wsapp _ cs pending = do
   clientId <- nextRandom
   let client = makeClient clientId conn
 
-  print $ "<<~~ Incoming ws connection " ++ show clientId
+  debug $ "<<~~ Incoming ws connection " ++ show clientId
 
   WS.forkPingThread conn heartbeatDelay
   modifyMVar_ cs $ \cur -> return $ addClient client cur
@@ -128,27 +132,27 @@ trackConnection :: Client -> MVar WSState -> IO ()
 trackConnection client@(clientId, clientConn) cs = handle catchDisconnect $
   forever $ do
     x <- WS.receive clientConn
-    print $ "?>?> got smth from ws client " ++ show clientId ++ ": " ++ show x
+    debug $ "?>?> got smth from ws client " ++ show clientId ++ ": " ++ show x
 
     where
       catchDisconnect e = case fromException e of
         Just WS.ConnectionClosed -> do
-          print $ "ws ConnectionClosed for " ++ show clientId
+          warn $ "ws ConnectionClosed for " ++ show clientId
           filterOutClient client cs
           return ()
 
         Just (WS.CloseRequest a b) -> do
-          print $ "ws CloseRequest from client " ++ show clientId ++ ": " ++ show a ++ "/" ++ show b
+          warn $ "ws CloseRequest from client " ++ show clientId ++ ": " ++ show a ++ "/" ++ show b
           filterOutClient client cs
           return ()
 
         Just (WS.ParseException s) -> do
-          print $ "ws ParseException for " ++ show clientId ++ ": " ++ s
+          error $ "ws ParseException for " ++ show clientId ++ ": " ++ s
           filterOutClient client cs
           return ()
 
         x -> do
-          print $ "ws closed for unknown reason for " ++ show clientId ++ ": " ++ show x
+          error $ "ws closed for unknown reason for " ++ show clientId ++ ": " ++ show x
           filterOutClient client cs
           return ()
 
@@ -168,36 +172,15 @@ staticHandler mime fn request response = response $ responseFile status200 mime 
 notFoundHandler :: Int -> Application
 notFoundHandler count request response = response $ responseLBS status200 [mimeText] "Unknown path"
 
-checkHandler :: MyDb -> Int -> Application
-checkHandler db count request response = response $ responseStream status200 [mimeJSON] (justCheckStreamJson db count)
-     where
-         justCheckStreamJson :: MyDb -> Int -> (Builder -> IO ()) -> IO () -> IO ()
-         justCheckStreamJson db count send flush =
-             return db >>= getUnreadCount >>= send . justUnreadCountToJson >> flush
-
-updateHandler :: MyDb -> Int -> Application
-updateHandler db count request response = response $ responseStream status200 [mimeJSON] (justFeedStreamJson db count)
-    where
-        justFeedStreamJson :: MyDb -> Int -> (Builder -> IO ()) -> IO () -> IO ()
-        justFeedStreamJson db count send flush = do
-          feedUrl <- getCachedFeed db count
-          (feed, res) <- readApi feedUrl
-
-          case res of
-            Left err -> send $ justTweetsToJson $ Left err
-            Right ts -> send $ justTweetsToJson $ Right ts
-
-          flush
-
 retweetHandler :: Int -> Application
 retweetHandler count request response = case queryString request of
     [("id", Just id_)] -> case B8.readInteger id_ of
           Just (int, str) -> do
-            print $ "got retweet " ++ show id_
+            debug $ "got retweet " ++ show id_
             response $ responseStream status200 [mimeJSON] (retweetStream (fromIntegral int :: Int64))
 
           Nothing -> do
-            print ("bad retweet id" :: String)
+            error ("bad retweet id" :: String)
             response $ responseLBS status200 [mimeJSON] "bad retweet id"
 
     _ -> response $ responseLBS status200 [mimeJSON] "bad request"
@@ -212,11 +195,11 @@ starHandler :: Int -> Application
 starHandler count request response = case queryString request of
     [("id", Just id_)] -> case B8.readInteger id_ of
           Just (int, str) -> do
-            print $ "got star " ++ show id_
+            debug $ "got star " ++ show id_
             response $ responseStream status200 [mimeJSON] (starStream (fromIntegral int :: Int64))
 
           Nothing -> do
-            print ("bad star id" :: String)
+            error ("bad star id" :: String)
             response $ responseLBS status200 [mimeJSON] "bad star id"
 
     _ -> response $ responseLBS status200 [mimeJSON] "bad request"
@@ -229,8 +212,8 @@ starHandler count request response = case queryString request of
 tweetHandler :: Int -> Application
 tweetHandler count request response = case queryString request of
     [("status", Just status)] -> do
-        print "got tweet "
-        print status
+        debug "got tweet "
+        debug $ show status
         response $ responseStream status200 [mimeJSON] (tweetStream status)
 
     _ -> response $ responseLBS status200 [mimeJSON] "bad request"
