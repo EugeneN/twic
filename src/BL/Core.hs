@@ -37,7 +37,7 @@ import           Network.HTTP.Conduit
 import           Control.Exception.Lifted  (try)
 
 import           Control.Applicative
-import           Control.Concurrent        (MVar, ThreadId, forkIO, killThread,
+import           Control.Concurrent        (MVar, ThreadId, forkIO, killThread, threadDelay,
                                             modifyMVar_, newEmptyMVar, newMVar,
                                             putMVar, readMVar, swapMVar, tryTakeMVar,
                                             takeMVar)
@@ -265,7 +265,6 @@ instance ToJSON TweetElement where
 --------------------------------------------------------------------------------
 
 retweetUrl :: TweetId -> Url
-
 retweetUrl x = "https://api.twitter.com/1.1/statuses/retweet/" ++ show x ++ ".json"
 
 starUrl :: TweetId -> Url
@@ -287,8 +286,9 @@ homeTimeline count = HomeTimeline $
   "https://api.twitter.com/1.1/statuses/home_timeline.json?count=" ++ show count
 
 homeTimelineSince :: TweetId -> Feed
+homeTimelineSince 0 = HomeTimeline "https://api.twitter.com/1.1/statuses/home_timeline.json"
 homeTimelineSince tid = HomeTimeline $
-  "https://api.twitter.com/1.1/statuses/home_timeline.json?since_id=" ++ show tid
+  "https://api.twitter.com/1.1/statuses/home_timeline.json?count=200&since_id=" ++ show tid
 
 homeTimelineSinceCount :: TweetId -> Int -> Feed
 homeTimelineSinceCount 0 0 = HomeTimeline "https://api.twitter.com/1.1/statuses/home_timeline.json"
@@ -319,6 +319,9 @@ saveLastSeen db ts = do
     getMaxId ts old = maximum $ old:(BL.Types.id_ <$> ts)
 
 handleIncomingTweets :: DL.MyDb -> MVar [Tweet] -> [Tweet] -> IO ()
+handleIncomingTweets db m [] = do
+    info "Got no updated tweets, skipping saving"
+    return ()
 handleIncomingTweets db m ts = do
     info $ "Got " ++ show (length ts) ++ " updated tweets: " ++ show ts
     _ <- saveLastSeen db ts
@@ -327,16 +330,34 @@ handleIncomingTweets db m ts = do
         Just oldts -> putMVar m $ oldts ++ ts
         Nothing    -> putMVar m ts
 
+updateFeed :: MVar (AppState DL.MyDb) -> IO ()
 updateFeed rs = do
     (RunState db _ _ _ fv _) <- readMVar rs
     feedUrl <- getUpdateFeedUrl db
-    (_, res) <- readApi feedUrl
+    doreq feedUrl db fv (0 :: Int)
 
+  where
+  doreq f db fv iter = do
+    (_, res) <- readApi f
     case res of
-        Right ts -> handleIncomingTweets db fv (reverse ts)
-        Left err -> error $ "error: " ++ show err
+      Right ts -> handleIncomingTweets db fv (reverse ts)
 
-writeApi :: Url -> IO (Either ApiError Tweet)
+      Left (TransportError (FailedConnectionException2 _ _ _ ex)) -> if iter < 2
+        then do
+          let oneSecond = 1000000 :: Int
+              retryDelay = 2 * oneSecond
+          error $ "Http error at update attempt " ++ show iter ++ ": " ++ show ex
+                ++ ". Retrying in " ++ show retryDelay ++ "ms"
+          threadDelay retryDelay
+          doreq f db fv (iter + 1)
+
+        else
+          error $ "error: update retry count exceeded: error was: " ++ show ex
+
+      Left (TransportError ex) -> error $ "error: transport error: " ++ show ex
+      Left (ApiError msg) -> error $ "error: api error: " ++ show msg
+
+writeApi :: Url -> IO (Either (ApiError HttpException) Tweet)
 writeApi url = do
     req <- parseUrl url
     let req' = req { method = "POST" }
@@ -354,7 +375,7 @@ writeApi url = do
             Left msg -> return $ Left $ ApiError msg
             Right t  -> return $ Right t
 
-readApi :: Feed -> IO (Feed, Either ApiError [Tweet])
+readApi :: Feed -> IO (Feed, Either (ApiError HttpException) [Tweet])
 readApi feed = do
   req <- parseUrl $ unfeedUrl feed
   res <- try $ withManager $ \m -> do
@@ -365,7 +386,7 @@ readApi feed = do
     Left (StatusCodeException (Network.HTTP.Types.Status code msg) _ _) ->
       return (feed, Left $ ApiError $ "Twitter API returned bad status code: " ++ show code ++ " " ++ show msg)
     Left x ->
-      return (feed, Left $ ApiError $ show x)
+      return (feed, Left $ TransportError x)
 
     Right r -> case eitherDecode $ responseBody r of
       Left msg -> return (feed, Left $ ApiError msg)

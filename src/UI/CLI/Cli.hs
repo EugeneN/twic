@@ -18,7 +18,6 @@ import           Data.Functor       ((<$>))
 type Action = String
 
 data Args = Args { action :: Action
-                 , count  :: Int
                  } deriving Show
 
 showTweet :: Tweet -> String
@@ -30,8 +29,8 @@ parseArgs = do
   args <- getArgs
 
   case args of
-    [action, countStr] | [(count,_)] <- reads countStr ->
-      return $ Just $ Args action count
+    [action] ->
+      return $ Just $ Args action
 
     _ -> return Nothing
 

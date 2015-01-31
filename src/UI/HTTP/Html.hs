@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module UI.HTTP.Html where
 
@@ -22,6 +23,7 @@ import           BL.Core
 import qualified UI.HTTP.Css                 as CSS
 
 import           Debug.Trace                 (trace)
+import           Network.HTTP.Conduit        (HttpException)
 
 
 
@@ -108,8 +110,9 @@ instance AsHtml Tweet where
                   f u (EntityUrl _ eUrl _ _) = eUrl == u
 
 
-instance AsHtml ApiError where
+instance AsHtml (ApiError HttpException) where
   asHtml (ApiError s) = H.span ! class_ "error" $ toHtml s
+  asHtml (TransportError x) = H.span ! class_ "error" $ toHtml $ show x
 
 
 
@@ -147,18 +150,18 @@ htmlPage title_ body_ error_ = docTypeHtml $ do
 
     H.script ! A.src "/cs/Main.js" ! A.type_ "text/javascript" $ mempty
 
-retweetToHtml :: Either ApiError Tweet -> Html
+retweetToHtml :: Either (ApiError HttpException) Tweet -> Html
 retweetToHtml res = case res of
   Left err -> htmlPage (Just "* Error loading tweets") Nothing (Just $ asHtml err)
   Right t  -> htmlPage (Just "retweet ok") (Just $ asHtml t) (Just $ H.span ! class_ "success" $ "retweet ok")
 
-justTweetsToHtml :: Either ApiError [Tweet] -> Html
+justTweetsToHtml :: Either (ApiError HttpException) [Tweet] -> Html
 justTweetsToHtml (Left exp) = toHtml ("can't load" :: String)
 justTweetsToHtml (Right ts) = case ts of
                                [] -> li ! class_ "no-tweets" $ "No new tweets"
                                _  -> forM_ (reverse ts) (li . asHtml)
 
-tweetsToHtml :: Either ApiError [Tweet] -> Html
+tweetsToHtml :: Either (ApiError HttpException) [Tweet] -> Html
 tweetsToHtml (Left exp) = htmlPage (Just "* Error loading tweets") Nothing (Just $ asHtml exp)
 tweetsToHtml (Right ts) = htmlPage title_ body_ err_
   where

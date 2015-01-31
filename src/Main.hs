@@ -39,7 +39,7 @@ warn = warningM logRealm
 error = errorM logRealm
 alert = alertM logRealm
 
-usage = "Usage: <me> serve | cli | dump tweets-count"
+usage = "Usage: <me> serve | cli | dump"
 
 
 httpWorker :: Application -> IO ThreadId
@@ -82,12 +82,12 @@ runManager = monitorAppBus
 
 
 
-handleAction :: String -> MVar (AppState MyDb) -> Int -> IO ()
-handleAction "serve" rs count = do
+handleAction :: String -> MVar (AppState MyDb) -> IO ()
+handleAction "serve" rs = do
     (RunState db _ _ _ fv av) <- readMVar rs
 
     info $ "Listening on port " ++ show port
-    app_ <- app db fv count
+    app_ <- app db fv
     hwid <- httpWorker app_
 
     info "Starting a timeoutWorker"
@@ -103,7 +103,7 @@ handleAction "serve" rs count = do
 
     runManager rs
 
-handleAction "cli" rs _ = do
+handleAction "cli" rs = do
     (RunState db _ _ _ fv av) <- readMVar rs
 
     info "Starting CLI client"
@@ -122,7 +122,7 @@ handleAction "cli" rs _ = do
 
     runManager rs
 
-handleAction "dump" rs _ = do
+handleAction "dump" rs = do
     (RunState db _ _ _ _ _) <- readMVar rs
     (lastSeen, prevTime) <- getPrevState db
 
@@ -130,10 +130,10 @@ handleAction "dump" rs _ = do
     putStrLn $ "last seen id: " ++ show lastSeen
              ++ "\nprev time: " ++ show prevTime
 
-handleAction _ _ _ = putStrLn usage
+handleAction _ _ = putStrLn usage
 
 ctrlCHandler = Catch $ do
-    alert "Got Ctrl-C, exiting"
+    alert $ "Got Ctrl-C, exiting"
     tid <- myThreadId
     killThread tid
 
@@ -149,14 +149,14 @@ main = do
 
   args <- parseArgs
   case args of
-      Just (Args action count) -> do
+      Just (Args action) -> do
           db <- openDb
           fv <- newMVar ([] :: [Tweet])
           av <- newEmptyMVar
 
           runstate <- newMVar $ makeAppState db Nothing Nothing Nothing fv av
 
-          handleAction action runstate count
+          handleAction action runstate
 
       Nothing -> putStrLn usage
 

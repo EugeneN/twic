@@ -2,8 +2,8 @@
 
 module UI.HTTP.App where
 
-import           BL.Core                        (readApi, retweetUrl, starUrl,
-                                                 tweetUrl, writeApi)
+import           BL.Core                        (retweetUrl, starUrl, tweetUrl,
+                                                 writeApi)
 import           BL.DataLayer                   (MyDb)
 import           BL.Types                       (Message (..), Tweet, TweetBody,
                                                  TweetId)
@@ -47,6 +47,7 @@ import           UI.HTTP.Json                   (justTweetsToJson,
                                                  tweetToJson)
 
 
+
 logRealm = "HttpApp"
 
 info = infoM logRealm
@@ -69,25 +70,25 @@ mimeJs   = ("Content-Type", "text/javascript")
 mimeJSON = ("Content-Type", "application/json")
 mimeIco  = ("Content-Type", "image/x-icon")
 
-httpapp :: MyDb -> Int -> Application -- = Request -> ResourceT IO Response
-httpapp db count request sendResponse = do
+httpapp :: MyDb -> Application -- = Request -> ResourceT IO Response
+httpapp db request sendResponse = do
   debug $ show $ pathInfo request
   case pathInfo request of
-    []                  -> homeHandler count request sendResponse
+    []                  -> homeHandler request sendResponse
 
     ["cs", "Main.js"]   -> staticHandler [mimeJs] "dist/cs/Main.js" request sendResponse
     ["favicon.ico"]     -> staticHandler [mimeIco] "res/favicon.ico" request sendResponse
 
-    ["retweet"]         -> retweetHandler count request sendResponse
-    ["retweet", _]      -> retweetHandler count request sendResponse
+    ["retweet"]         -> retweetHandler request sendResponse
+    ["retweet", _]      -> retweetHandler request sendResponse
 
-    ["star"]            -> starHandler count request sendResponse
-    ["star", _]         -> starHandler count request sendResponse
+    ["star"]            -> starHandler request sendResponse
+    ["star", _]         -> starHandler request sendResponse
 
-    ["tweet"]           -> tweetHandler count request sendResponse
-    ["tweet", _]        -> tweetHandler count request sendResponse
+    ["tweet"]           -> tweetHandler request sendResponse
+    ["tweet", _]        -> tweetHandler request sendResponse
 
-    path                -> notFoundHandler count request sendResponse
+    path                -> notFoundHandler request sendResponse
 
 makeClient :: UUID -> WS.Connection -> Client
 makeClient a c = (a, c)
@@ -101,13 +102,13 @@ removeClient client = Prelude.filter ((/= fst client) . fst)
 broadcast :: BSL.ByteString -> WSState -> IO ()
 broadcast msg clients = forM_ clients $ \(_, conn) -> WS.sendTextData conn msg
 
-app :: MyDb -> MVar FeedState -> Int -> IO Application
-app db m count = do
+app :: MyDb -> MVar FeedState -> IO Application
+app db m = do
     cs <- newMVar ([] :: WSState)
     _ <- startBroadcastWorker m cs
     return $ WaiWS.websocketsOr WS.defaultConnectionOptions
                                 (wsapp m cs)
-                                (httpapp db count)
+                                (httpapp db)
 
 wsapp :: MVar FeedState -> MVar WSState -> WS.ServerApp
 wsapp _ cs pending = do
@@ -160,20 +161,20 @@ trackConnection client@(clientId, clientConn) cs = handle catchDisconnect $
         modifyMVar_ cs $ \clients ->
             return $ removeClient client clients
 
-homeHandler :: Int -> Application
-homeHandler count request response = response $ responseStream status200 [mimeHtml] (homeStream count)
+homeHandler :: Application
+homeHandler request response = response $ responseStream status200 [mimeHtml] homeStream
     where
-        homeStream :: Int -> (Builder -> IO ()) -> IO () -> IO ()
-        homeStream count send flush = return homePage >>= send . renderHtmlBuilder >> flush
+        homeStream :: (Builder -> IO ()) -> IO () -> IO ()
+        homeStream send flush = return homePage >>= send . renderHtmlBuilder >> flush
 
 staticHandler :: ResponseHeaders -> FilePath -> Application
 staticHandler mime fn request response = response $ responseFile status200 mime fn Nothing
 
-notFoundHandler :: Int -> Application
-notFoundHandler count request response = response $ responseLBS status200 [mimeText] "Unknown path"
+notFoundHandler :: Application
+notFoundHandler request response = response $ responseLBS status200 [mimeText] "Unknown path"
 
-retweetHandler :: Int -> Application
-retweetHandler count request response = case queryString request of
+retweetHandler :: Application
+retweetHandler request response = case queryString request of
     [("id", Just id_)] -> case B8.readInteger id_ of
           Just (int, str) -> do
             debug $ "got retweet " ++ show id_
@@ -191,8 +192,8 @@ retweetHandler count request response = case queryString request of
             return (retweetUrl id_) >>= writeApi >>= send . retweetToJson >> flush
 
 
-starHandler :: Int -> Application
-starHandler count request response = case queryString request of
+starHandler :: Application
+starHandler request response = case queryString request of
     [("id", Just id_)] -> case B8.readInteger id_ of
           Just (int, str) -> do
             debug $ "got star " ++ show id_
@@ -209,8 +210,8 @@ starHandler count request response = case queryString request of
         starStream id_ send flush =
             return (starUrl id_) >>= writeApi >>= send . starToJson >> flush
 
-tweetHandler :: Int -> Application
-tweetHandler count request response = case queryString request of
+tweetHandler :: Application
+tweetHandler request response = case queryString request of
     [("status", Just status)] -> do
         debug "got tweet "
         debug $ show status

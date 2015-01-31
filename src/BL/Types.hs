@@ -5,12 +5,13 @@
 module BL.Types where
 
 import           Control.Applicative
-import           Control.Concurrent  (MVar, ThreadId)
+import           Control.Concurrent     (MVar, ThreadId)
+import           Control.Exception.Base
 import           Control.Monad
 import           Data.Aeson
 import           Data.ByteString
-import           Data.Int            (Int64)
-import           Data.Text           (Text)
+import           Data.Int               (Int64)
+import           Data.Text              (Text)
 import           GHC.Generics
 
 type Url = String
@@ -108,7 +109,7 @@ data JsonResponse = JsonResponse { okTitle  :: Text
                                  , okTweets :: [Tweet]
                                  } deriving (Show, Generic)
 
-data ApiError = ApiError String deriving Show
+data Exception a => ApiError a = ApiError String | TransportError a deriving Show
 
 instance Eq Tweet where
   (Tweet _ _ aid _ _ _ _) == (Tweet _ _ bid _ _ _ _) = aid == bid
