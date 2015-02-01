@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes        #-}
 
 module BL.Core (
     Url
@@ -330,8 +331,17 @@ handleIncomingTweets db m ts = do
         Just oldts -> putMVar m $ oldts ++ ts
         Nothing    -> putMVar m ts
 
+
 updateFeed :: MVar (AppState DL.MyDb) -> IO ()
-updateFeed rs = do
+updateFeed = if CFG.updateFeedAsync
+    then updateFeedAsync
+    else updateFeedSync
+
+updateFeedAsync :: MVar (AppState DL.MyDb) -> IO ()
+updateFeedAsync = void . forkIO . updateFeedSync
+
+updateFeedSync :: MVar (AppState DL.MyDb) -> IO ()
+updateFeedSync rs = do
     (RunState db _ _ _ fv _) <- readMVar rs
     feedUrl <- getUpdateFeedUrl db
     doreq feedUrl db fv (0 :: Int)
@@ -342,13 +352,11 @@ updateFeed rs = do
     case res of
       Right ts -> handleIncomingTweets db fv (reverse ts)
 
-      Left (TransportError (FailedConnectionException2 _ _ _ ex)) -> if iter < 2
+      Left (TransportError (FailedConnectionException2 _ _ _ ex)) -> if iter < CFG.updateRetryCount
         then do
-          let oneSecond = 1000000 :: Int
-              retryDelay = 2 * oneSecond
           error $ "Http error at update attempt " ++ show iter ++ ": " ++ show ex
-                ++ ". Retrying in " ++ show retryDelay ++ "ms"
-          threadDelay retryDelay
+                ++ ". Retrying in " ++ show CFG.updateRetryDelay ++ "ms"
+          threadDelay CFG.updateRetryDelay
           doreq f db fv (iter + 1)
 
         else

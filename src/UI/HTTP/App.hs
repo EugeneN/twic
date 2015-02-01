@@ -127,6 +127,7 @@ startBroadcastWorker m cs = forkIO $
     forever $ do
         ts <- takeMVar m
         clients <- readMVar cs
+        -- TODO if there are no clients, put ts back?
         broadcast (encode ts) clients
 
 trackConnection :: Client -> MVar WSState -> IO ()
