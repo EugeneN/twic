@@ -18,7 +18,7 @@ import           UI.CLI.Cli                (Args (..), cliClientWorker,
 import           UI.HTTP.App               (app)
 
 import           Control.Concurrent        (MVar, ThreadId, forkIO, killThread,
-                                            myThreadId, newEmptyMVar, newMVar,
+                                            myThreadId, newEmptyMVar, newMVar, putMVar,
                                             readMVar, swapMVar, takeMVar)
 import           Control.Monad             (forever)
 
@@ -39,6 +39,7 @@ warn = warningM logRealm
 error = errorM logRealm
 alert = alertM logRealm
 
+usage :: String
 usage = "Usage: <me> serve | cli | dump"
 
 
@@ -49,17 +50,21 @@ runManager :: forall b. MVar (AppState MyDb) -> IO b
 runManager = monitorAppBus
     where
     monitorAppBus rs = forever $ do
-        (RunState _ _ _ _ _ av) <- readMVar rs
+        (RunState db _ _ _ fv av) <- readMVar rs
 
         cmd <- takeMVar av
         case cmd of
             MReloadFeed -> do
                 info "Reloading feed"
                 restartStreamWorker rs
-                BLC.updateFeed rs
+                BLC.updateFeed db fv
 
             MNOOP ->
                 info "Monitor: NOOP"
+
+            MExit -> do
+                alert "Bye bye :-)"
+                exitWith $ ExitFailure 1
 
             _ ->
                 warn "Unknown command: " -- ++ show cmd
@@ -94,7 +99,7 @@ handleAction "serve" rs = do
     twid <- timeoutWorker db av
 
     info "Updating feed"
-    BLC.updateFeed rs
+    BLC.updateFeed db fv
 
     info "Starting a streamWorker"
     swid <- streamWorker db fv
@@ -113,7 +118,7 @@ handleAction "cli" rs = do
     twid <- timeoutWorker db av
 
     info "Updating feed"
-    BLC.updateFeed rs
+    BLC.updateFeed db fv
 
     info "Starting a streamWorker"
     swid <- streamWorker db fv
@@ -132,10 +137,10 @@ handleAction "dump" rs = do
 
 handleAction _ _ = putStrLn usage
 
-ctrlCHandler = Catch $ do
-    alert $ "Got Ctrl-C, exiting"
-    tid <- myThreadId
-    killThread tid
+ctrlCHandler :: MVar IPCMessage -> Handler
+ctrlCHandler av = Catch $ do
+    alert "Got Ctrl-C, sending exit cmd"
+    putMVar av MExit
 
 main :: IO ()
 main = do
@@ -145,8 +150,6 @@ main = do
     setFormatter lh (simpleLogFormatter "[$time : $loggername : $prio] $msg")
   updateGlobalLogger rootLoggerName (addHandler h)
 
-  --installHandler keyboardSignal ctrlCHandler Nothing
-
   args <- parseArgs
   case args of
       Just (Args action) -> do
@@ -155,6 +158,8 @@ main = do
           av <- newEmptyMVar
 
           runstate <- newMVar $ makeAppState db Nothing Nothing Nothing fv av
+
+          installHandler keyboardSignal (ctrlCHandler av) Nothing
 
           handleAction action runstate
 

@@ -21,3 +21,5 @@ timeoutWorkerDelay = (timeoutThreshod * oneSecond) - oneSecond
 updateRetryCount = 3 :: Int
 updateRetryDelay = 2 * oneSecond
 updateFeedAsync = False
+
+cloudDbUrl = "https://***.firebaseio.com/.json" :: String

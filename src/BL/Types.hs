@@ -21,10 +21,12 @@ type TweetBody = ByteString
 
 data Message = Message Int
 
-data IPCMessage = MReloadFeed | MOther | MNOOP deriving Show
+data IPCMessage = MReloadFeed | MExit | MOther | MNOOP deriving Show
 
 instance Show (MVar IPCMessage)
 instance Show (MVar [Tweet])
+
+type FeedState = [Tweet]
 
 makeAppState :: a -> Maybe ThreadId -> Maybe ThreadId -> Maybe ThreadId -> MVar [Tweet] -> MVar IPCMessage -> AppState a
 makeAppState db x y z fv av = RunState db x y z fv av

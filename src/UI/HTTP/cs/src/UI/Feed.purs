@@ -190,8 +190,9 @@ handleStarClick id_ = do
             pure unit
 
 
-feedMouseOverHandler ev = do
-    trace "got mouse over"
+feedClickHandler ev = do
+    trace "got mouse click"
+    trace $ toString ev
     pure unit
 
 processTweetElement :: Entities -> TweetElement -> TweetElement
@@ -329,9 +330,10 @@ tweetsList :: ComponentClass {tweets :: [Tweet]} {}
 tweetsList = createClass spec { displayName = "TweetsList", render = renderFun }
     where
         renderFun this = case this.props.tweets of
-            [] -> pure $ D.ul {id: "feed"} [D.li { className: "no-tweets" } [D.rawText "No new tweets"]]
+            [] -> pure $ D.ul {id: "feed"
+                              , onClick: (\ev -> feedClickHandler ev)} [D.li { className: "no-tweets" } [D.rawText "No new tweets"]]
             _  -> pure $ D.ul { id: "feed"
-                              , onMouseOver: feedMouseOverHandler
+                              , onClick: (\ev -> feedClickHandler ev)
                               } $ asHtml <$> this.props.tweets
 
 renderTweets :: forall eff. String -> [Tweet] -> Eff (dom :: DOM, react :: React | eff) Component

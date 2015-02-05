@@ -18,6 +18,7 @@ module BL.Core (
   , retweetStatusToTweet
   , handleIncomingTweets
   , statusToTweet
+  , saveLastSeen
   , updateFeed
   , retweetUrl
   , tweetUrl
@@ -47,6 +48,7 @@ import           Control.Monad.Trans       (liftIO)
 import           Network.HTTP.Types        (Status (..))
 
 import qualified BL.DataLayer              as DL
+import qualified BL.CloudDataLayer         as CDL
 import           BL.Parser                 (parseTweet)
 import           BL.Types
 import qualified Config                    as CFG
@@ -58,6 +60,8 @@ import           Prelude                   hiding (error)
 import           System.Log.Handler.Simple
 import           System.Log.Logger
 import qualified Web.Twitter.Types         as TT
+import           Data.Time.Clock           (UTCTime (..), diffUTCTime,
+                                            getCurrentTime, secondsToDiffTime)
 
 logRealm = "Core"
 
@@ -304,45 +308,52 @@ homeTimelineSinceCount tid count = HomeTimeline $
 
 getUpdateFeedUrl :: DL.MyDb -> IO Feed
 getUpdateFeedUrl db = do
-  (lastSeenId, _) <- DL.getPrevState db
-  return $ homeTimelineSince lastSeenId
+  xs <- CDL.readCloudDb
+  info $ "Read from cloud db with result: " ++ show xs
+
+  let z = case xs of
+          Left x  -> 0
+          Right y -> CDL.lastSeenId (maximum y)
+
+  debug $ "Selected max tweet id: " ++ show z
+  return $ homeTimelineSince z
 
 --------------------------------------------------------------------------------
 
--- this should rather be run from the broadcast worker
-saveLastSeen :: DL.MyDb -> [Tweet] -> IO ()
+saveLastSeen :: DL.MyDb -> [Tweet] -> IO (Either CDL.CloudDataLayerError CDL.WriteResponse)
 saveLastSeen db ts = do
-    (oldLastSeen, _) <- DL.getPrevState db
-    DL.writeLastSeen db (getMaxId ts oldLastSeen)
+    now <- getCurrentTime
+    res <- CDL.writeCloudDb $ CDL.CloudDbStoreItem (getMaxId ts) (show now) -- now
+    info $ "Wrote to cloud db with result: " ++ show res
+    return res
 
     where
-    getMaxId :: [Tweet] -> TweetId -> TweetId
-    getMaxId ts old = maximum $ old:(BL.Types.id_ <$> ts)
+    getMaxId :: [Tweet] -> TweetId
+    getMaxId ts = maximum (BL.Types.id_ <$> ts)
 
 handleIncomingTweets :: DL.MyDb -> MVar [Tweet] -> [Tweet] -> IO ()
-handleIncomingTweets db m [] = do
+handleIncomingTweets _ _ [] = do
     info "Got no updated tweets, skipping saving"
     return ()
-handleIncomingTweets db m ts = do
-    info $ "Got " ++ show (length ts) ++ " updated tweets: " ++ show ts
-    _ <- saveLastSeen db ts
-    maybeOldTs <- tryTakeMVar m
+handleIncomingTweets _ fv ts = do
+    info $ "Got " ++ show (length ts) ++ " updated tweet/s"
+    maybeOldTs <- tryTakeMVar fv
     case maybeOldTs of
-        Just oldts -> putMVar m $ oldts ++ ts
-        Nothing    -> putMVar m ts
+        Just oldts -> putMVar fv $ oldts ++ ts
+        Nothing    -> putMVar fv ts
 
 
-updateFeed :: MVar (AppState DL.MyDb) -> IO ()
+updateFeed :: DL.MyDb -> MVar [Tweet] -> IO ()
 updateFeed = if CFG.updateFeedAsync
     then updateFeedAsync
     else updateFeedSync
 
-updateFeedAsync :: MVar (AppState DL.MyDb) -> IO ()
-updateFeedAsync = void . forkIO . updateFeedSync
+updateFeedAsync :: DL.MyDb -> MVar [Tweet] -> IO ()
+updateFeedAsync a b = void . forkIO $ updateFeedSync a b
 
-updateFeedSync :: MVar (AppState DL.MyDb) -> IO ()
-updateFeedSync rs = do
-    (RunState db _ _ _ fv _) <- readMVar rs
+updateFeedSync :: DL.MyDb -> MVar [Tweet] -> IO ()
+updateFeedSync db fv = do
+    info "Updating feed"
     feedUrl <- getUpdateFeedUrl db
     doreq feedUrl db fv (0 :: Int)
 

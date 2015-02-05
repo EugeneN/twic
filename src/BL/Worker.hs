@@ -47,6 +47,7 @@ shouldForceUpdate :: UTCTime -> UTCTime -> Bool
 shouldForceUpdate prev cur =
   diffUTCTime cur prev > realToFrac CFG.timeoutThreshod
 
+-- TODO handle http timeouts, not just sleep mode
 timeoutWorker :: MyDb -> MVar IPCMessage -> IO ThreadId
 timeoutWorker db ch = forkIO $ forever $ do
   curTime <- getCurrentTime

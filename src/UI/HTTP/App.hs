@@ -2,19 +2,21 @@
 
 module UI.HTTP.App where
 
-import           BL.Core                        (retweetUrl, starUrl, tweetUrl,
+import           BL.Core                        (retweetUrl, saveLastSeen,
+                                                 starUrl, tweetUrl, updateFeed,
                                                  writeApi)
 import           BL.DataLayer                   (MyDb)
-import           BL.Types                       (Message (..), Tweet, TweetBody,
-                                                 TweetId)
+import           BL.Types                       (FeedState, Message (..), Tweet,
+                                                 TweetBody, TweetId)
 import           Blaze.ByteString.Builder       (Builder, fromByteString)
 import           Config                         (heartbeatDelay)
 import           Control.Applicative            ((<$>))
 import           Control.Concurrent             (MVar, ThreadId, forkIO,
                                                  killThread, modifyMVar,
                                                  modifyMVar_, myThreadId,
-                                                 newMVar, readMVar, takeMVar,
-                                                 threadDelay)
+                                                 newMVar, putMVar, readMVar,
+                                                 takeMVar, threadDelay,
+                                                 tryTakeMVar)
 import           Control.Exception              (fromException, handle)
 import           Control.Monad                  (forM_, forever)
 import           Control.Monad.IO.Class
@@ -61,7 +63,7 @@ error = errorM logRealm
 type Filename  = String
 type Client    = (UUID, WS.Connection)
 type WSState   = [Client]
-type FeedState = [Tweet]
+
 
 mimeHtml :: (HeaderName, ByteString)
 mimeHtml = ("Content-Type", "text/html")
@@ -99,19 +101,28 @@ addClient client clients = client : clients
 removeClient :: Client -> WSState -> WSState
 removeClient client = Prelude.filter ((/= fst client) . fst)
 
+sendToClients :: MyDb -> MVar [Client] -> [Tweet] -> IO ()
+sendToClients db cs ts = do
+    clients <- readMVar cs
+    case clients of
+        [] -> info "No clients available"
+        _ -> do
+            saveLastSeen db ts
+            broadcast (encode ts) clients
+
 broadcast :: BSL.ByteString -> WSState -> IO ()
 broadcast msg clients = forM_ clients $ \(_, conn) -> WS.sendTextData conn msg
 
 app :: MyDb -> MVar FeedState -> IO Application
-app db m = do
+app db fv = do
     cs <- newMVar ([] :: WSState)
-    _ <- startBroadcastWorker m cs
+    _ <- startBroadcastWorker db fv cs
     return $ WaiWS.websocketsOr WS.defaultConnectionOptions
-                                (wsapp m cs)
+                                (wsapp db fv cs)
                                 (httpapp db)
 
-wsapp :: MVar FeedState -> MVar WSState -> WS.ServerApp
-wsapp _ cs pending = do
+wsapp :: MyDb -> MVar FeedState -> MVar WSState -> WS.ServerApp
+wsapp db fv cs pending = do
   conn <- WS.acceptRequest pending
   clientId <- nextRandom
   let client = makeClient clientId conn
@@ -120,21 +131,21 @@ wsapp _ cs pending = do
 
   WS.forkPingThread conn heartbeatDelay
   modifyMVar_ cs $ \cur -> return $ addClient client cur
+  updateFeed db fv
   trackConnection client cs
 
-startBroadcastWorker :: MVar FeedState -> MVar WSState -> IO ThreadId
-startBroadcastWorker m cs = forkIO $
+startBroadcastWorker :: MyDb -> MVar FeedState -> MVar WSState -> IO ThreadId
+startBroadcastWorker db fv cs = forkIO $
     forever $ do
-        ts <- takeMVar m
-        clients <- readMVar cs
-        -- TODO if there are no clients, put ts back?
-        broadcast (encode ts) clients
+        ts <- takeMVar fv
+        sendToClients db cs ts
 
 trackConnection :: Client -> MVar WSState -> IO ()
 trackConnection client@(clientId, clientConn) cs = handle catchDisconnect $
   forever $ do
     x <- WS.receive clientConn
     debug $ "?>?> got smth from ws client " ++ show clientId ++ ": " ++ show x
+    -- TODO handle ControlMessage (Close 1001 "")
 
     where
       catchDisconnect e = case fromException e of
