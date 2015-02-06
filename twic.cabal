@@ -65,4 +65,5 @@ Executable twic
     , time
     , hslogger
     , unix
+    , containers
 

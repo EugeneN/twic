@@ -3,8 +3,8 @@
 module UI.HTTP.App where
 
 import           BL.Core                        (retweetUrl, saveLastSeen,
-                                                 starUrl, tweetUrl, updateFeed,
-                                                 writeApi)
+                                                 saveLastSeenAsync, starUrl,
+                                                 tweetUrl, updateFeed, writeApi)
 import           BL.DataLayer                   (MyDb)
 import           BL.Types                       (FeedState, Message (..), Tweet,
                                                  TweetBody, TweetId)
@@ -107,7 +107,7 @@ sendToClients db cs ts = do
     case clients of
         [] -> info "No clients available"
         _ -> do
-            saveLastSeen db ts
+            saveLastSeenAsync db ts
             broadcast (encode ts) clients
 
 broadcast :: BSL.ByteString -> WSState -> IO ()

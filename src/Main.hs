@@ -98,8 +98,8 @@ handleAction "serve" rs = do
     info "Starting a timeoutWorker"
     twid <- timeoutWorker db av
 
-    info "Updating feed"
-    BLC.updateFeed db fv
+--     info "Updating feed"
+--     BLC.updateFeed db fv
 
     info "Starting a streamWorker"
     swid <- streamWorker db fv

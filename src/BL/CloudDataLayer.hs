@@ -76,7 +76,7 @@ readCloudJSON str = case decode str :: Maybe (Map String CloudDbStoreItem) of
     Just y  -> Right (Data.Map.elems y)
     Nothing -> Left $ CloudDbDataError "error reading cloud json"
 
-
+-- TODO apply ordering and limit to read queries. Also off line garbage collection.
 readCloudDb :: IO (Either CloudDataLayerError CloudDbStore)
 readCloudDb = do
     req <- parseUrl CFG.cloudDbUrl

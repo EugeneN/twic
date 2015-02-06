@@ -19,6 +19,7 @@ module BL.Core (
   , handleIncomingTweets
   , statusToTweet
   , saveLastSeen
+  , saveLastSeenAsync
   , updateFeed
   , retweetUrl
   , tweetUrl
@@ -39,29 +40,29 @@ import           Network.HTTP.Conduit
 import           Control.Exception.Lifted  (try)
 
 import           Control.Applicative
-import           Control.Concurrent        (MVar, ThreadId, forkIO, killThread, threadDelay,
+import           Control.Concurrent        (MVar, ThreadId, forkIO, killThread,
                                             modifyMVar_, newEmptyMVar, newMVar,
-                                            putMVar, readMVar, swapMVar, tryTakeMVar,
-                                            takeMVar)
+                                            putMVar, readMVar, swapMVar,
+                                            takeMVar, threadDelay, tryTakeMVar)
 import           Control.Monad
 import           Control.Monad.Trans       (liftIO)
 import           Network.HTTP.Types        (Status (..))
 
-import qualified BL.DataLayer              as DL
 import qualified BL.CloudDataLayer         as CDL
+import qualified BL.DataLayer              as DL
 import           BL.Parser                 (parseTweet)
 import           BL.Types
 import qualified Config                    as CFG
 import           Data.Aeson
 import           Data.HashMap.Strict
 import           Data.Int                  (Int64)
+import           Data.Time.Clock           (UTCTime (..), diffUTCTime,
+                                            getCurrentTime, secondsToDiffTime)
 import           GHC.Generics
 import           Prelude                   hiding (error)
 import           System.Log.Handler.Simple
 import           System.Log.Logger
 import qualified Web.Twitter.Types         as TT
-import           Data.Time.Clock           (UTCTime (..), diffUTCTime,
-                                            getCurrentTime, secondsToDiffTime)
 
 logRealm = "Core"
 
@@ -309,7 +310,7 @@ homeTimelineSinceCount tid count = HomeTimeline $
 getUpdateFeedUrl :: DL.MyDb -> IO Feed
 getUpdateFeedUrl db = do
   xs <- CDL.readCloudDb
-  info $ "Read from cloud db with result: " ++ show xs
+  info $ "Read from cloud db with result of length: " ++ show (length <$> xs)
 
   let z = case xs of
           Left x  -> 0
@@ -319,6 +320,9 @@ getUpdateFeedUrl db = do
   return $ homeTimelineSince z
 
 --------------------------------------------------------------------------------
+
+saveLastSeenAsync :: DL.MyDb -> [Tweet] -> IO ThreadId
+saveLastSeenAsync db ts = forkIO $ saveLastSeen db ts >> return ()
 
 saveLastSeen :: DL.MyDb -> [Tweet] -> IO (Either CDL.CloudDataLayerError CDL.WriteResponse)
 saveLastSeen db ts = do
