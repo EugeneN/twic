@@ -73,6 +73,12 @@ timeoutWorker db ch = forkIO $ forever $ do
 
   sendUpdateMessage ch = putMVar ch MReloadFeed
 
+updateWorker :: MyDb -> MVar [Tweet] -> MVar UpdateMessage -> IO ThreadId
+updateWorker db fv uv = forkIO $ forever $ do
+    ur <- takeMVar uv
+    debug $ "***Got an update request at " ++ show ur
+    -- TODO throttle update requests here
+    BLC.updateFeedSync db fv
 
 streamWorker :: MyDb -> MVar [Tweet] -> IO ThreadId
 streamWorker db m = forkIO $

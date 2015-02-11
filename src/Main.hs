@@ -8,7 +8,8 @@ import           BL.DataLayer              (MyDb, getPrevState, openDb)
 
 import           BL.Types                  (AppState (..), IPCMessage (..),
                                             Tweet (..), makeAppState)
-import           BL.Worker                 (streamWorker, timeoutWorker)
+import           BL.Worker                 (streamWorker, timeoutWorker,
+                                            updateWorker)
 import           Config                    (port)
 
 import           Network.Wai
@@ -18,8 +19,9 @@ import           UI.CLI.Cli                (Args (..), cliClientWorker,
 import           UI.HTTP.App               (app)
 
 import           Control.Concurrent        (MVar, ThreadId, forkIO, killThread,
-                                            myThreadId, newEmptyMVar, newMVar, putMVar,
-                                            readMVar, swapMVar, takeMVar)
+                                            myThreadId, newEmptyMVar, newMVar,
+                                            putMVar, readMVar, swapMVar,
+                                            takeMVar)
 import           Control.Monad             (forever)
 
 import           Prelude                   hiding (error)
@@ -50,14 +52,14 @@ runManager :: forall b. MVar (AppState MyDb) -> IO b
 runManager = monitorAppBus
     where
     monitorAppBus rs = forever $ do
-        (RunState db _ _ _ fv av) <- readMVar rs
+        (RunState db _ _ _ _ fv av uv) <- readMVar rs
 
         cmd <- takeMVar av
         case cmd of
             MReloadFeed -> do
                 info "Reloading feed"
                 restartStreamWorker rs
-                BLC.updateFeed db fv
+                BLC.updateFeed uv
 
             MNOOP ->
                 info "Monitor: NOOP"
@@ -70,7 +72,7 @@ runManager = monitorAppBus
                 warn "Unknown command: " -- ++ show cmd
 
     restartStreamWorker rs = do
-        (RunState db twi maybeSwi hwi fv av) <- readMVar rs
+        (RunState db twi maybeSwi hwi uvi fv av uv) <- readMVar rs
         case maybeSwi of
             Just swi -> do
                 info "Killing old stream worker... "
@@ -81,7 +83,7 @@ runManager = monitorAppBus
                 newWorkerId <- streamWorker db fv
                 info "done"
 
-                _ <- swapMVar rs (RunState db twi (Just newWorkerId) hwi fv av)
+                _ <- swapMVar rs (RunState db twi (Just newWorkerId) hwi uvi fv av uv)
                 return ()
             Nothing -> warn "no swi"
 
@@ -89,27 +91,27 @@ runManager = monitorAppBus
 
 handleAction :: String -> MVar (AppState MyDb) -> IO ()
 handleAction "serve" rs = do
-    (RunState db _ _ _ fv av) <- readMVar rs
+    (RunState db _ _ _ _ fv av uv) <- readMVar rs
 
     info $ "Listening on port " ++ show port
-    app_ <- app db fv
+    app_ <- app db fv uv
     hwid <- httpWorker app_
 
     info "Starting a timeoutWorker"
     twid <- timeoutWorker db av
 
---     info "Updating feed"
---     BLC.updateFeed db fv
+    info "Starting an updateWorker"
+    uwid <- updateWorker db fv uv
 
     info "Starting a streamWorker"
     swid <- streamWorker db fv
 
-    _ <- swapMVar rs (RunState db (Just twid) (Just swid) (Just hwid) fv av)
+    _ <- swapMVar rs (RunState db (Just twid) (Just swid) (Just hwid) (Just uwid) fv av uv)
 
     runManager rs
 
 handleAction "cli" rs = do
-    (RunState db _ _ _ fv av) <- readMVar rs
+    (RunState db _ _ _ _ fv av uv) <- readMVar rs
 
     info "Starting CLI client"
     cwid <- cliClientWorker fv
@@ -117,18 +119,21 @@ handleAction "cli" rs = do
     info "Starting a timeoutWorker"
     twid <- timeoutWorker db av
 
+    info "Starting an updateWorker"
+    uwid <- updateWorker db fv uv
+
     info "Updating feed"
-    BLC.updateFeed db fv
+    BLC.updateFeed uv
 
     info "Starting a streamWorker"
     swid <- streamWorker db fv
 
-    _ <- swapMVar rs (RunState db (Just twid) (Just swid) (Just cwid) fv av)
+    _ <- swapMVar rs (RunState db (Just twid) (Just swid) (Just cwid) (Just uwid) fv av uv)
 
     runManager rs
 
 handleAction "dump" rs = do
-    (RunState db _ _ _ _ _) <- readMVar rs
+    (RunState db _ _ _ _ _ _ _) <- readMVar rs
     (lastSeen, prevTime) <- getPrevState db
 
     putStrLn "Store dump:"
@@ -156,8 +161,9 @@ main = do
           db <- openDb
           fv <- newMVar ([] :: [Tweet])
           av <- newEmptyMVar
+          uv <- newEmptyMVar
 
-          runstate <- newMVar $ makeAppState db Nothing Nothing Nothing fv av
+          runstate <- newMVar $ makeAppState db Nothing Nothing Nothing Nothing fv av uv
 
           installHandler keyboardSignal (ctrlCHandler av) Nothing
 

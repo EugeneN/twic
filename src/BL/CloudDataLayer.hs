@@ -71,15 +71,19 @@ type CloudDbStore = [CloudDbStoreItem]
 instance FromJSON CloudDbStore
 instance ToJSON CloudDbStore
 
+applyLimit :: String -> String -> Int -> String
+applyLimit url orderByKey count = url ++ "?orderBy=\"" ++ orderByKey
+                                      ++ "\"&limitToLast=" ++ show count
+
 readCloudJSON :: DBL.ByteString -> Either CloudDataLayerError CloudDbStore
 readCloudJSON str = case decode str :: Maybe (Map String CloudDbStoreItem) of
     Just y  -> Right (Data.Map.elems y)
     Nothing -> Left $ CloudDbDataError "error reading cloud json"
 
--- TODO apply ordering and limit to read queries. Also off line garbage collection.
+-- TODO offline garbage collection.
 readCloudDb :: IO (Either CloudDataLayerError CloudDbStore)
 readCloudDb = do
-    req <- parseUrl CFG.cloudDbUrl
+    req <- parseUrl $ applyLimit CFG.cloudDbUrl "lastSeenId" 10
     res <- try $ withManager $ \m -> httpLbs req m
 
     return $ case res of

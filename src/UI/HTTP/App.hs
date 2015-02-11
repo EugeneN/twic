@@ -7,7 +7,8 @@ import           BL.Core                        (retweetUrl, saveLastSeen,
                                                  tweetUrl, updateFeed, writeApi)
 import           BL.DataLayer                   (MyDb)
 import           BL.Types                       (FeedState, Message (..), Tweet,
-                                                 TweetBody, TweetId)
+                                                 TweetBody, TweetId,
+                                                 UpdateMessage)
 import           Blaze.ByteString.Builder       (Builder, fromByteString)
 import           Config                         (heartbeatDelay)
 import           Control.Applicative            ((<$>))
@@ -113,16 +114,16 @@ sendToClients db cs ts = do
 broadcast :: BSL.ByteString -> WSState -> IO ()
 broadcast msg clients = forM_ clients $ \(_, conn) -> WS.sendTextData conn msg
 
-app :: MyDb -> MVar FeedState -> IO Application
-app db fv = do
+app :: MyDb -> MVar FeedState -> MVar UpdateMessage -> IO Application
+app db fv uv = do
     cs <- newMVar ([] :: WSState)
     _ <- startBroadcastWorker db fv cs
     return $ WaiWS.websocketsOr WS.defaultConnectionOptions
-                                (wsapp db fv cs)
+                                (wsapp db fv uv cs)
                                 (httpapp db)
 
-wsapp :: MyDb -> MVar FeedState -> MVar WSState -> WS.ServerApp
-wsapp db fv cs pending = do
+wsapp :: MyDb -> MVar FeedState -> MVar UpdateMessage -> MVar WSState -> WS.ServerApp
+wsapp db fv uv cs pending = do
   conn <- WS.acceptRequest pending
   clientId <- nextRandom
   let client = makeClient clientId conn
@@ -131,7 +132,7 @@ wsapp db fv cs pending = do
 
   WS.forkPingThread conn heartbeatDelay
   modifyMVar_ cs $ \cur -> return $ addClient client cur
-  updateFeed db fv
+  updateFeed uv
   trackConnection client cs
 
 startBroadcastWorker :: MyDb -> MVar FeedState -> MVar WSState -> IO ThreadId

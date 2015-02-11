@@ -21,6 +21,7 @@ module BL.Core (
   , saveLastSeen
   , saveLastSeenAsync
   , updateFeed
+  , updateFeedSync
   , retweetUrl
   , tweetUrl
   , writeApi
@@ -347,13 +348,12 @@ handleIncomingTweets _ fv ts = do
         Nothing    -> putMVar fv ts
 
 
-updateFeed :: DL.MyDb -> MVar [Tweet] -> IO ()
-updateFeed = if CFG.updateFeedAsync
-    then updateFeedAsync
-    else updateFeedSync
-
-updateFeedAsync :: DL.MyDb -> MVar [Tweet] -> IO ()
-updateFeedAsync a b = void . forkIO $ updateFeedSync a b
+updateFeed :: MVar UTCTime -> IO ()
+updateFeed uv = do
+    now <- getCurrentTime
+    debug $ "***Putting an update request at " ++ show now
+    _ <- forkIO $ putMVar uv now -- avoid blocking caller
+    return ()
 
 updateFeedSync :: DL.MyDb -> MVar [Tweet] -> IO ()
 updateFeedSync db fv = do

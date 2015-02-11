@@ -12,6 +12,7 @@ import           Data.Aeson
 import           Data.ByteString
 import           Data.Int               (Int64)
 import           Data.Text              (Text)
+import           Data.Time.Clock        (UTCTime (..))
 import           GHC.Generics
 
 type Url = String
@@ -28,15 +29,21 @@ instance Show (MVar [Tweet])
 
 type FeedState = [Tweet]
 
-makeAppState :: a -> Maybe ThreadId -> Maybe ThreadId -> Maybe ThreadId -> MVar [Tweet] -> MVar IPCMessage -> AppState a
-makeAppState db x y z fv av = RunState db x y z fv av
+type UpdateMessage = UTCTime
+instance Show (MVar UTCTime)
+
+
+makeAppState :: a -> Maybe ThreadId -> Maybe ThreadId -> Maybe ThreadId -> Maybe ThreadId -> MVar [Tweet] -> MVar IPCMessage -> MVar UpdateMessage -> AppState a
+makeAppState db x y z u fv av uv = RunState db x y z u fv av uv
 
 data AppState a = RunState { db              :: a
                            , timeoutWorkerId :: Maybe ThreadId
                            , streamWorkerId  :: Maybe ThreadId
                            , uiWorkerId      :: Maybe ThreadId
+                           , updateWorkerId  :: Maybe ThreadId
                            , feedVar         :: MVar [Tweet]
                            , appBusVar       :: MVar IPCMessage
+                           , updateVar       :: MVar UpdateMessage
                            } deriving Show
 
 data Feed = UserTimeline Url
