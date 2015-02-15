@@ -28,16 +28,56 @@ import UI.Messages (renderMessage)
 import UI.LoaderIndicator (hideLoader, showLoader)
 
 
-handleRenderTweets :: forall eff. RefVal State
-                                  -> [Tweet]
-                                  -> Eff (dom :: DOM, react :: React | eff) Unit
-handleRenderTweets state ts = do
-    setTitle "0 new tweets"
+render :: forall eff. RefVal State
+                   -> Eff (ref :: Ref, dom :: DOM, react :: React | eff) Unit
+render state = do
+    State { oldFeed = (OldFeed of_)
+          , currentFeed = (CurrentFeed cf)
+          , newFeed = (NewFeed nf)} <- readRef state
+
+    let nt = length nf
+
+    setTitle $ show nt ++ " new tweets"
     renderMessage messagesId ""
-    renderTweets containerId ts
-    renderCheckButton state checkButtonContainerId 0
+    renderTweets containerId cf
+    renderCheckButton state checkButtonContainerId nt
+    pure unit
+
+foreign import scrollToEl
+    """
+    function scrollToEl(id){
+        console.log("scroll to", id, document.getElementById(id));
+        document.getElementById(id).scrollIntoView(true) }
+    """ :: forall eff. String -> (Eff (dom :: DOM | eff) Unit)
+
+foreign import data Timeout :: !
+
+foreign import forkPostpone
+    """
+    function forkPostpone(f) {
+        return function(delay) {
+            return function() {
+                console.log("postponing ", f, delay)
+                setTimeout(f, delay);
+            }
+        }
+    }
+    """ :: forall a eff. a -> Number -> Eff (|eff) Unit
+
+handleRenderTweets :: forall eff. RefVal State -> Eff (ref :: Ref, dom :: DOM, react :: React | eff) Unit
+handleRenderTweets state = do
+    render state
     scrollToTop
     pure unit
+
+foreign import splitAt
+    """
+    function splitAt(as) {
+        return function(idx) {
+            return [as.slice(0, idx), as.slice(idx)]
+        }
+    }
+    """ :: forall a. [a] -> Number -> [[a]]
 
 loadTweetsFromState :: forall eff. RefVal State
                                 -> Eff (ref :: Ref, dom :: DOM, react :: React | eff) Unit
@@ -45,12 +85,57 @@ loadTweetsFromState state = do
     State { oldFeed = (OldFeed of_)
           , currentFeed = (CurrentFeed cf)
           , newFeed = (NewFeed nf)} <- readRef state
+
     writeRef state $ State { oldFeed: OldFeed $ of_ ++ cf
                            , currentFeed: CurrentFeed nf
                            , newFeed: NewFeed [] }
 
-    handleRenderTweets state nf
+    handleRenderTweets state
     pure unit
+
+showOldTweets :: forall eff. RefVal State
+                          -> Eff (ref :: Ref, dom :: DOM, react :: React | eff) Unit
+showOldTweets state = do
+    State { oldFeed = (OldFeed of_)
+          , currentFeed = (CurrentFeed cf)
+          , newFeed = (NewFeed nf)} <- readRef state
+
+    let l = length of_
+        splitIdx = if l > 20 then (l - 20) else 0
+        chunks = splitAt of_ splitIdx
+        scrollToId = case head cf of
+                            Just (Tweet {id_str = x}) -> x
+                            Nothing -> "feed"
+
+    case chunks of
+        [newOf, historyFd] -> do
+            writeRef state $ State { oldFeed: OldFeed newOf
+                                   , currentFeed: CurrentFeed $ historyFd ++ cf
+                                   , newFeed: (NewFeed nf) }
+
+            render state
+            forkPostpone (\_ -> scrollToEl scrollToId) 50
+            pure unit
+
+        _ -> pure unit
+    pure unit
+
+--------------------------------------------------------------------------------
+
+historyButtonComponent :: ComponentClass {state :: RefVal State} {}
+historyButtonComponent = createClass spec { displayName = "historyButton", render = renderFun } where
+    renderFun this = pure $
+        D.button { className: "history-button"
+                 , onClick: showOldTweets this.props.state
+                 , id: "load-history-tweets-id"} [D.rawText "···"]
+
+renderHistoryButton :: forall eff. RefVal State ->
+                                 String ->
+                                 Eff (dom :: DOM, react :: React | eff) Component
+renderHistoryButton state_ targetId =
+    renderComponentById (historyButtonComponent {state: state_} []) targetId
+
+--------------------------------------------------------------------------------
 
 checkButtonComponent :: ComponentClass {count :: Number, state :: RefVal State} {}
 checkButtonComponent = createClass spec { displayName = "CheckButton", render = renderFun } where
@@ -71,6 +156,61 @@ renderCheckButton state_ targetId count =
     renderComponentById (checkButtonComponent {count: count, state: state_} []) targetId
 
 --------------------------------------------------------------------------------
+
+-- Rx.Observable.fromEvent(document, 'wheel')
+-- .bufferWithTime( 100 )
+-- .filter( function (buf){ return buf.length > 5 })
+-- .map( function (es){ return es.map( function(e){ return e.originalEvent.deltaY } ) } )
+-- .filter(function(ys){ return ys.reduce(function(a,b){ return a + b }, 0) < 0 })
+-- .subscribe(function(x){console.log('^^^', x)})
+
+foreign import getDeltaY
+    """
+    function getDeltaY(e) { return e.originalEvent.deltaY }
+    """ :: forall a. a -> Number
+
+foreign import bufferWithTime
+    """
+    function bufferWithTime(time) {
+        return function(obs) {
+            return obs.bufferWithTime(time)
+        }
+    }
+    """ :: forall a. Number -> Rx.Observable a -> Rx.Observable [a]
+
+foreign import throttleWithTimeout
+    """
+    function throttleWithTimeout(time) {
+        return function(obs) {
+            return obs.throttleWithTimeout(time)
+        }
+    }
+    """ :: forall a. Number -> Rx.Observable a -> Rx.Observable a    
+
+foreign import getWheelObservable
+  """
+  function getWheelObservable(x) {
+    return Rx.Observable.fromEvent(document, 'wheel')
+  }
+  """ :: forall a b. b -> Rx.Observable a
+
+
+listenHistoryEvents state = obsE ~> handler
+  where
+  obsZ = getWheelObservable 1
+  obsA = 200 `bufferWithTime` obsZ
+  obsB = (\buf -> (length buf) > 1) `filterRx` obsA
+  obsC = (\es  -> getDeltaY <$> es) <$> obsB
+  obsD = (\ys  -> (foldl (\a b -> a + b) 0 ys) < 0) `filterRx` obsC
+  obsE = 500 `throttleWithTimeout` obsD
+
+  handler x = do
+    trace $ "got scroll up" ++ show x
+    -- TODO check if document is on top
+    showOldTweets state
+    pure unit
+
+
 
 listenFeedKeys state = do
     bodyKeys <- J.select "body" >>= onAsObservable "keyup"
@@ -144,23 +284,23 @@ handleError t m = do
     hideLoader containerId
     pure unit
 
-loadFeed :: forall eff. RefVal State -> Eff (dom :: DOM, react :: React | eff) Unit
-loadFeed state = do
-    setTitle "Loading..."
-    showLoader containerId
-    (rioGet updateUrl) ~> handleUpdate
-    pure unit
-
-    where
-        handleUpdate :: forall eff. String -> Eff (dom :: DOM, react :: React | eff) Unit
-        handleUpdate s = case (fromResponse s) of
-            ResponseError {errTitle = t, errMessage = m} -> do
-                handleError t m
-                pure unit
-
-            ResponseSuccess {okTitle = t', okTweets = ts} -> do
-                handleRenderTweets state $ reverse ts
-                pure unit
+--loadFeed :: forall eff. RefVal State -> Eff (dom :: DOM, react :: React | eff) Unit
+--loadFeed state = do
+--    setTitle "Loading..."
+--    showLoader containerId
+--    (rioGet updateUrl) ~> handleUpdate
+--    pure unit
+--
+--    where
+--        handleUpdate :: forall eff. String -> Eff (dom :: DOM, react :: React | eff) Unit
+--        handleUpdate s = case (fromResponse s) of
+--            ResponseError {errTitle = t, errMessage = m} -> do
+--                handleError t m
+--                pure unit
+--
+--            ResponseSuccess {okTitle = t', okTweets = ts} -> do
+--                handleRenderTweets state
+--                pure unit
 
 
 -- handleRetweetClick :: forall e. String -> Eff (trace :: Trace | e) Unit
@@ -319,7 +459,7 @@ tweetComponent = createClass spec { displayName = "Tweet" , render = renderFun }
               ]
 
         renderFun this = pure $
-          D.li {} [ authorToHtml this.props.author this.props.retweeted_by
+          D.li {id: this.props.id_str} [ authorToHtml this.props.author this.props.retweeted_by
                   , D.span { className: "tweet-body"
                            , "data-tweet-id": this.props.id_str
                            } (asHtml <<< (processTweetElement this.props.entities) <$> this.props.text)

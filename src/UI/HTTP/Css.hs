@@ -293,6 +293,25 @@ bodyCss = do
   "#write-tweet-id" ? do
     display none
 
+  ".history-button" ? do
+    background transparent
+    border solid (px 1) transparent
+    cursor pointer
+    color gray
+    transition "all" (ms 180) linear (ms 180)
+    width (px 25)
+    height (px 25)
+    borderRadius (pct 50) (pct 50) (pct 50) (pct 50)
+
+  ".history-button" # hover ? do
+    color black
+--     boxShadow 0 0 (px 4) (setA 50 baseColor)
+    background lightgreen
+    border solid (px 1) lightgreen
+
+  ".history-button" # focus ? do
+    outline solid (px 0) baseColor
+
   ".write-tweet" ? do
     position fixed
     top (px 66)

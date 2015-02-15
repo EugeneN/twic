@@ -16,8 +16,7 @@ import           Control.Applicative  ((<$>), (<*>))
 import           Control.Monad.Reader (ask)
 import           Control.Monad.State  (get, put)
 import           Data.SafeCopy
-import           Data.Time.Clock      (UTCTime (..), diffUTCTime,
-                                       getCurrentTime)
+import           Data.Time.Clock      (UTCTime (..), getCurrentTime)
 import           Prelude              hiding (id)
 
 

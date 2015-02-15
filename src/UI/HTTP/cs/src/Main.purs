@@ -7,7 +7,7 @@ import Config
 import Types
 import Utils
 import Core
-import UI.Feed (loadFeed, startWsClient, listenFeedKeys, loadTweetsFromState)
+import UI.Feed (renderHistoryButton, startWsClient, listenFeedKeys, loadTweetsFromState, listenHistoryEvents)
 import UI.LoaderIndicator (showLoader, hideLoader)
 import UI.Messages (renderMessage)
 import UI.TweetWriter (listenWriteKeys)
@@ -21,6 +21,10 @@ main = do
 
     listenWriteKeys
     listenFeedKeys state
+
+    renderHistoryButton state "load-history-container-id"
+
+    -- listenHistoryEvents state
 
     loadTweetsFromState state
     startWsClient state

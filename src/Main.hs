@@ -30,7 +30,9 @@ import           System.Log.Handler        (setFormatter)
 import           System.Log.Handler.Simple
 import           System.Log.Logger
 
+import qualified BL.CloudDataLayer         as CDL
 import qualified Control.Exception         as E
+import           Data.Time.Clock           (diffUTCTime, getCurrentTime)
 import           System.Exit
 import           System.Posix.Signals
 
@@ -46,13 +48,13 @@ usage = "Usage: <me> serve | cli | dump"
 
 
 httpWorker :: Application -> IO ThreadId
-httpWorker app =  forkIO $ run port app
+httpWorker =  forkIO . run port
 
 runManager :: forall b. MVar (AppState MyDb) -> IO b
 runManager = monitorAppBus
     where
     monitorAppBus rs = forever $ do
-        (RunState db _ _ _ _ fv av uv) <- readMVar rs
+        (RunState st _ _ _ _ _ _ av uv) <- readMVar rs
 
         cmd <- takeMVar av
         case cmd of
@@ -65,14 +67,15 @@ runManager = monitorAppBus
                 info "Monitor: NOOP"
 
             MExit -> do
-                alert "Bye bye :-)"
+                rt <- BLC.getRunTime st
+                alert $ "Run time: " ++ show rt ++ "\nBye bye :-)"
                 exitWith $ ExitFailure 1
 
             _ ->
                 warn "Unknown command: " -- ++ show cmd
 
     restartStreamWorker rs = do
-        (RunState db twi maybeSwi hwi uvi fv av uv) <- readMVar rs
+        (RunState st db twi maybeSwi hwi uvi fv av uv) <- readMVar rs
         case maybeSwi of
             Just swi -> do
                 info "Killing old stream worker... "
@@ -83,7 +86,7 @@ runManager = monitorAppBus
                 newWorkerId <- streamWorker db fv
                 info "done"
 
-                _ <- swapMVar rs (RunState db twi (Just newWorkerId) hwi uvi fv av uv)
+                _ <- swapMVar rs (RunState st db twi (Just newWorkerId) hwi uvi fv av uv)
                 return ()
             Nothing -> warn "no swi"
 
@@ -91,10 +94,10 @@ runManager = monitorAppBus
 
 handleAction :: String -> MVar (AppState MyDb) -> IO ()
 handleAction "serve" rs = do
-    (RunState db _ _ _ _ fv av uv) <- readMVar rs
+    (RunState st db _ _ _ _ fv av uv) <- readMVar rs
 
     info $ "Listening on port " ++ show port
-    app_ <- app db fv uv
+    app_ <- app st db fv uv
     hwid <- httpWorker app_
 
     info "Starting a timeoutWorker"
@@ -106,12 +109,12 @@ handleAction "serve" rs = do
     info "Starting a streamWorker"
     swid <- streamWorker db fv
 
-    _ <- swapMVar rs (RunState db (Just twid) (Just swid) (Just hwid) (Just uwid) fv av uv)
+    _ <- swapMVar rs (RunState st db (Just twid) (Just swid) (Just hwid) (Just uwid) fv av uv)
 
     runManager rs
 
 handleAction "cli" rs = do
-    (RunState db _ _ _ _ fv av uv) <- readMVar rs
+    (RunState st db _ _ _ _ fv av uv) <- readMVar rs
 
     info "Starting CLI client"
     cwid <- cliClientWorker fv
@@ -128,17 +131,18 @@ handleAction "cli" rs = do
     info "Starting a streamWorker"
     swid <- streamWorker db fv
 
-    _ <- swapMVar rs (RunState db (Just twid) (Just swid) (Just cwid) (Just uwid) fv av uv)
+    _ <- swapMVar rs (RunState st db (Just twid) (Just swid) (Just cwid) (Just uwid) fv av uv)
 
     runManager rs
 
 handleAction "dump" rs = do
-    (RunState db _ _ _ _ _ _ _) <- readMVar rs
-    (lastSeen, prevTime) <- getPrevState db
+    (RunState st db _ _ _ _ _ _ _) <- readMVar rs
+    (z, prevTime, rt) <- BLC.getStatus st db
 
     putStrLn "Store dump:"
-    putStrLn $ "last seen id: " ++ show lastSeen
-             ++ "\nprev time: " ++ show prevTime
+    putStrLn $ "last seen id: " ++ show z
+             ++ "\nPrev time: " ++ show prevTime
+             ++ "\nRun time: " ++  show rt
 
 handleAction _ _ = putStrLn usage
 
@@ -162,8 +166,9 @@ main = do
           fv <- newMVar ([] :: [Tweet])
           av <- newEmptyMVar
           uv <- newEmptyMVar
+          now <- getCurrentTime
 
-          runstate <- newMVar $ makeAppState db Nothing Nothing Nothing Nothing fv av uv
+          runstate <- newMVar $ makeAppState now db Nothing Nothing Nothing Nothing fv av uv
 
           installHandler keyboardSignal (ctrlCHandler av) Nothing
 

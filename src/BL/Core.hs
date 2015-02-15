@@ -23,7 +23,9 @@ module BL.Core (
   , updateFeed
   , updateFeedSync
   , retweetUrl
+  , getRunTime
   , tweetUrl
+  , getStatus
   , writeApi
   , readApi
   , starUrl
@@ -57,8 +59,9 @@ import qualified Config                    as CFG
 import           Data.Aeson
 import           Data.HashMap.Strict
 import           Data.Int                  (Int64)
-import           Data.Time.Clock           (UTCTime (..), diffUTCTime,
-                                            getCurrentTime, secondsToDiffTime)
+import           Data.Time.Clock           (NominalDiffTime, UTCTime (..),
+                                            diffUTCTime, getCurrentTime,
+                                            secondsToDiffTime)
 import           GHC.Generics
 import           Prelude                   hiding (error)
 import           System.Log.Handler.Simple
@@ -420,4 +423,21 @@ readApi feed = do
     unfeedUrl (UserTimeline u) = u
     unfeedUrl (HomeTimeline u) = u
 
+getRunTime :: UTCTime -> IO NominalDiffTime
+getRunTime st = do
+    endTime <- getCurrentTime
+    return $ diffUTCTime endTime st
+
+-- TODO type aliases and type for status
+getStatus :: UTCTime -> DL.MyDb -> IO (TweetId, UTCTime, NominalDiffTime)
+getStatus st db = do
+    xs <- CDL.readCloudDb
+    (_, prevTime) <- DL.getPrevState db
+    rt <- getRunTime st
+
+    let z = case xs of
+              Left _  -> -1 -- unknown or error
+              Right y -> CDL.lastSeenId (maximum y)
+
+    return (z, prevTime, rt)
 

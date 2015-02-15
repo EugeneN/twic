@@ -33,10 +33,11 @@ type UpdateMessage = UTCTime
 instance Show (MVar UTCTime)
 
 
-makeAppState :: a -> Maybe ThreadId -> Maybe ThreadId -> Maybe ThreadId -> Maybe ThreadId -> MVar [Tweet] -> MVar IPCMessage -> MVar UpdateMessage -> AppState a
-makeAppState db x y z u fv av uv = RunState db x y z u fv av uv
+makeAppState :: UTCTime -> a -> Maybe ThreadId -> Maybe ThreadId -> Maybe ThreadId -> Maybe ThreadId -> MVar [Tweet] -> MVar IPCMessage -> MVar UpdateMessage -> AppState a
+makeAppState st db x y z u fv av uv = RunState st db x y z u fv av uv
 
-data AppState a = RunState { db              :: a
+data AppState a = RunState { startTime       :: UTCTime
+                           , db              :: a
                            , timeoutWorkerId :: Maybe ThreadId
                            , streamWorkerId  :: Maybe ThreadId
                            , uiWorkerId      :: Maybe ThreadId

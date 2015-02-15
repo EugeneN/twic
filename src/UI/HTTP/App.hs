@@ -2,52 +2,60 @@
 
 module UI.HTTP.App where
 
-import           BL.Core                        (retweetUrl, saveLastSeen,
-                                                 saveLastSeenAsync, starUrl,
-                                                 tweetUrl, updateFeed, writeApi)
-import           BL.DataLayer                   (MyDb)
-import           BL.Types                       (FeedState, Message (..), Tweet,
-                                                 TweetBody, TweetId,
-                                                 UpdateMessage)
-import           Blaze.ByteString.Builder       (Builder, fromByteString)
-import           Config                         (heartbeatDelay)
-import           Control.Applicative            ((<$>))
-import           Control.Concurrent             (MVar, ThreadId, forkIO,
-                                                 killThread, modifyMVar,
-                                                 modifyMVar_, myThreadId,
-                                                 newMVar, putMVar, readMVar,
-                                                 takeMVar, threadDelay,
-                                                 tryTakeMVar)
-import           Control.Exception              (fromException, handle)
-import           Control.Monad                  (forM_, forever)
+import           BL.Core                             (getStatus, retweetUrl,
+                                                      saveLastSeen,
+                                                      saveLastSeenAsync,
+                                                      starUrl, tweetUrl,
+                                                      updateFeed, writeApi)
+import           BL.DataLayer                        (MyDb)
+import           BL.Types                            (FeedState, Message (..),
+                                                      Tweet, TweetBody, TweetId,
+                                                      UpdateMessage)
+import           Blaze.ByteString.Builder            (Builder, fromByteString)
+import           Config                              (heartbeatDelay)
+import           Control.Applicative                 ((<$>))
+import           Control.Concurrent                  (MVar, ThreadId, forkIO,
+                                                      killThread, modifyMVar,
+                                                      modifyMVar_, myThreadId,
+                                                      newMVar, putMVar,
+                                                      readMVar, takeMVar,
+                                                      threadDelay, tryTakeMVar)
+import           Control.Exception                   (fromException, handle)
+import           Control.Monad                       (forM_, forever)
 import           Control.Monad.IO.Class
-import           Data.Aeson                     (encode)
+import           Data.Aeson                          (encode)
 import           Data.ByteString
-import qualified Data.ByteString.Char8          as B8
-import qualified Data.ByteString.Lazy           as BSL
-import           Data.Int                       (Int64)
-import           Data.Text                      (Text)
-import qualified Data.Text                      as T
+import qualified Data.ByteString.Char8               as B8
+import qualified Data.ByteString.Lazy                as BSL
+import           Data.Int                            (Int64)
+import           Data.Text                           (Text)
+import qualified Data.Text                           as T
 import           Data.Tuple
-import           Data.UUID                      (UUID)
-import           Data.UUID.V4                   (nextRandom)
-import           Network.HTTP.Types             (HeaderName, status200)
-import           Network.HTTP.Types.Header      (ResponseHeaders)
-import           Network.Wai                    (Application, pathInfo,
-                                                 queryString, responseFile,
-                                                 responseLBS, responseStream)
-import qualified Network.Wai.Handler.WebSockets as WaiWS
-import qualified Network.WebSockets             as WS
-import           Prelude                        hiding (error)
+import           Data.UUID                           (UUID)
+import           Data.UUID.V4                        (nextRandom)
+import           Network.HTTP.Types                  (HeaderName, status200)
+import           Network.HTTP.Types.Header           (ResponseHeaders)
+import           Network.Wai                         (Application, pathInfo,
+                                                      queryString, responseFile,
+                                                      responseLBS,
+                                                      responseStream)
+import qualified Network.Wai.Handler.WebSockets      as WaiWS
+import qualified Network.WebSockets                  as WS
+import           Prelude                             hiding (error)
 import           System.Log.Handler.Simple
 import           System.Log.Logger
-import           Text.Blaze.Html.Renderer.Utf8  (renderHtmlBuilder)
-import           UI.HTTP.Html                   (homePage, justTweetsToHtml,
-                                                 retweetToHtml, tweetsToHtml)
-import           UI.HTTP.Json                   (justTweetsToJson,
-                                                 justUnreadCountToJson,
-                                                 retweetToJson, starToJson,
-                                                 tweetToJson)
+import           Text.Blaze.Html.Renderer.Utf8       (renderHtmlBuilder)
+import           UI.HTTP.Html                        (homePage,
+                                                      justTweetsToHtml,
+                                                      retweetToHtml,
+                                                      tweetsToHtml)
+import           UI.HTTP.Json                        (justTweetsToJson,
+                                                      justUnreadCountToJson,
+                                                      retweetToJson, starToJson,
+                                                      tweetToJson)
+
+import           Blaze.ByteString.Builder.ByteString (fromByteString)
+import           Data.Time.Clock                     (UTCTime (..))
 
 
 
@@ -57,9 +65,6 @@ info = infoM logRealm
 warn = warningM logRealm
 debug = debugM logRealm
 error = errorM logRealm
-
---import qualified Network.Wai.Application.Static as Static
---import Data.FileEmbed (embedDir)
 
 type Filename  = String
 type Client    = (UUID, WS.Connection)
@@ -73,8 +78,8 @@ mimeJs   = ("Content-Type", "text/javascript")
 mimeJSON = ("Content-Type", "application/json")
 mimeIco  = ("Content-Type", "image/x-icon")
 
-httpapp :: MyDb -> Application -- = Request -> ResourceT IO Response
-httpapp db request sendResponse = do
+httpapp :: UTCTime -> MyDb -> Application -- = Request -> ResourceT IO Response
+httpapp st db request sendResponse = do
   debug $ show $ pathInfo request
   case pathInfo request of
     []                  -> homeHandler request sendResponse
@@ -82,16 +87,12 @@ httpapp db request sendResponse = do
     ["cs", "Main.js"]   -> staticHandler [mimeJs] "dist/cs/Main.js" request sendResponse
     ["favicon.ico"]     -> staticHandler [mimeIco] "res/favicon.ico" request sendResponse
 
-    ["retweet"]         -> retweetHandler request sendResponse
-    ["retweet", _]      -> retweetHandler request sendResponse
-
-    ["star"]            -> starHandler request sendResponse
-    ["star", _]         -> starHandler request sendResponse
-
-    ["tweet"]           -> tweetHandler request sendResponse
-    ["tweet", _]        -> tweetHandler request sendResponse
-
-    path                -> notFoundHandler request sendResponse
+    path                -> case Prelude.head path of
+        "retweet"       -> retweetHandler request sendResponse
+        "star"          -> starHandler request sendResponse
+        "tweet"         -> tweetHandler request sendResponse
+        "stat"          -> statHandler st db request sendResponse
+        _               -> notFoundHandler request sendResponse
 
 makeClient :: UUID -> WS.Connection -> Client
 makeClient a c = (a, c)
@@ -114,13 +115,13 @@ sendToClients db cs ts = do
 broadcast :: BSL.ByteString -> WSState -> IO ()
 broadcast msg clients = forM_ clients $ \(_, conn) -> WS.sendTextData conn msg
 
-app :: MyDb -> MVar FeedState -> MVar UpdateMessage -> IO Application
-app db fv uv = do
+app :: UTCTime -> MyDb -> MVar FeedState -> MVar UpdateMessage -> IO Application
+app st db fv uv = do
     cs <- newMVar ([] :: WSState)
     _ <- startBroadcastWorker db fv cs
     return $ WaiWS.websocketsOr WS.defaultConnectionOptions
                                 (wsapp db fv uv cs)
-                                (httpapp db)
+                                (httpapp st db)
 
 wsapp :: MyDb -> MVar FeedState -> MVar UpdateMessage -> MVar WSState -> WS.ServerApp
 wsapp db fv uv cs pending = do
@@ -178,7 +179,7 @@ homeHandler :: Application
 homeHandler request response = response $ responseStream status200 [mimeHtml] homeStream
     where
         homeStream :: (Builder -> IO ()) -> IO () -> IO ()
-        homeStream send flush = return homePage >>= send . renderHtmlBuilder >> flush
+        homeStream send flush = (send . renderHtmlBuilder) homePage >> flush
 
 staticHandler :: ResponseHeaders -> FilePath -> Application
 staticHandler mime fn request response = response $ responseFile status200 mime fn Nothing
@@ -202,7 +203,7 @@ retweetHandler request response = case queryString request of
     where
         retweetStream :: TweetId -> (Builder -> IO ()) -> IO () -> IO ()
         retweetStream id_ send flush =
-            return (retweetUrl id_) >>= writeApi >>= send . retweetToJson >> flush
+            writeApi (retweetUrl id_) >>= send . retweetToJson >> flush
 
 
 starHandler :: Application
@@ -221,7 +222,7 @@ starHandler request response = case queryString request of
     where
         starStream :: TweetId -> (Builder -> IO ()) -> IO () -> IO ()
         starStream id_ send flush =
-            return (starUrl id_) >>= writeApi >>= send . starToJson >> flush
+            writeApi (starUrl id_) >>= send . starToJson >> flush
 
 tweetHandler :: Application
 tweetHandler request response = case queryString request of
@@ -235,4 +236,12 @@ tweetHandler request response = case queryString request of
     where
         tweetStream :: TweetBody -> (Builder -> IO ()) -> IO () -> IO ()
         tweetStream status send flush =
-            return (tweetUrl status) >>= writeApi >>= send . tweetToJson >> flush
+            writeApi (tweetUrl status) >>= send . tweetToJson >> flush
+
+statHandler :: UTCTime -> MyDb -> Application
+statHandler st db request response = response $ responseStream status200 [mimeText] (respStream st db)
+    where
+    respStream :: UTCTime -> MyDb -> (Builder -> IO ()) -> IO () -> IO ()
+    respStream st db send flush = do
+        send (fromByteString "hello\n") >> flush
+        getStatus st db >>=  send . fromByteString . B8.pack . show >> flush

@@ -15,8 +15,8 @@ import           Data.ByteString
 import qualified Data.ByteString.Lazy      as DBL
 import qualified Data.HashMap.Strict       as H
 import           Data.Map
-import           Data.Time.Clock           (UTCTime (..), diffUTCTime,
-                                            getCurrentTime, secondsToDiffTime)
+import           Data.Time.Clock           (UTCTime (..), getCurrentTime,
+                                            secondsToDiffTime)
 import           GHC.Generics
 import           Network.HTTP.Conduit
 import           Prelude                   hiding (error)
