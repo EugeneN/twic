@@ -7,28 +7,35 @@ import Config
 import Types
 import Utils
 import Core
-import UI.Feed (renderHistoryButton, startWsClient, listenFeedKeys, loadTweetsFromState, listenHistoryEvents)
+import UI.Feed (startWsClient, listenFeedKeys, showNewTweets, listenHistoryEvents)
 import UI.LoaderIndicator (showLoader, hideLoader)
-import UI.Messages (renderMessage)
 import UI.TweetWriter (listenWriteKeys)
+import UI.RootLayout (renderRootLayout)
 
 
 
 
 main = do
     trace "hello there"
-    state <- newRef initialState
 
-    listenWriteKeys
+    state <- newRef initialState
+    rl <- renderRootLayout "root" state
+
+    listenState state rl
+    listenWriteKeys state
     listenFeedKeys state
 
-    renderHistoryButton state "load-history-container-id"
+    --listenHistoryEvents state
 
-    -- listenHistoryEvents state
-
-    loadTweetsFromState state
     startWsClient state
 
     pure unit
+
+    where
+    listenState state rl = stateObservable ~> (\_ -> do
+        trace "Got state update"
+        --renderRootLayout "root" state
+        setProps rl state
+        pure unit)
 
 

@@ -27,81 +27,33 @@ import UI.Types
 import UI.Messages (renderMessage)
 import UI.LoaderIndicator (hideLoader, showLoader)
 
-
-render :: forall eff. RefVal State
-                   -> Eff (ref :: Ref, dom :: DOM, react :: React | eff) Unit
-render state = do
-    State { oldFeed = (OldFeed of_)
+showNewTweets :: forall eff. RefVal State
+                          -> Eff (ref :: Ref, dom :: DOM, react :: React | eff) Unit
+showNewTweets state = do
+    State { oldFeed     = (OldFeed of_)
           , currentFeed = (CurrentFeed cf)
-          , newFeed = (NewFeed nf)} <- readRef state
+          , newFeed     = (NewFeed nf)
+          , errors      = es } <- readState state
 
-    let nt = length nf
+    writeState state $ State { oldFeed:     OldFeed $ of_ ++ cf
+                           , currentFeed: CurrentFeed nf
+                           , newFeed:     NewFeed []
+                           , errors:      es}
 
-    setTitle $ show nt ++ " new tweets"
-    renderMessage messagesId ""
-    renderTweets containerId cf
-    renderCheckButton state checkButtonContainerId nt
-    pure unit
-
-foreign import scrollToEl
-    """
-    function scrollToEl(id){
-        console.log("scroll to", id, document.getElementById(id));
-        document.getElementById(id).scrollIntoView(true) }
-    """ :: forall eff. String -> (Eff (dom :: DOM | eff) Unit)
-
-foreign import data Timeout :: !
-
-foreign import forkPostpone
-    """
-    function forkPostpone(f) {
-        return function(delay) {
-            return function() {
-                console.log("postponing ", f, delay)
-                setTimeout(f, delay);
-            }
-        }
-    }
-    """ :: forall a eff. a -> Number -> Eff (|eff) Unit
-
-handleRenderTweets :: forall eff. RefVal State -> Eff (ref :: Ref, dom :: DOM, react :: React | eff) Unit
-handleRenderTweets state = do
-    render state
     scrollToTop
     pure unit
 
-foreign import splitAt
-    """
-    function splitAt(as) {
-        return function(idx) {
-            return [as.slice(0, idx), as.slice(idx)]
-        }
-    }
-    """ :: forall a. [a] -> Number -> [[a]]
-
-loadTweetsFromState :: forall eff. RefVal State
-                                -> Eff (ref :: Ref, dom :: DOM, react :: React | eff) Unit
-loadTweetsFromState state = do
-    State { oldFeed = (OldFeed of_)
-          , currentFeed = (CurrentFeed cf)
-          , newFeed = (NewFeed nf)} <- readRef state
-
-    writeRef state $ State { oldFeed: OldFeed $ of_ ++ cf
-                           , currentFeed: CurrentFeed nf
-                           , newFeed: NewFeed [] }
-
-    handleRenderTweets state
-    pure unit
-
 showOldTweets :: forall eff. RefVal State
+                          -> Number
                           -> Eff (ref :: Ref, dom :: DOM, react :: React | eff) Unit
-showOldTweets state = do
-    State { oldFeed = (OldFeed of_)
+showOldTweets state count = do
+    State { oldFeed     = (OldFeed of_)
           , currentFeed = (CurrentFeed cf)
-          , newFeed = (NewFeed nf)} <- readRef state
+          , newFeed     = (NewFeed nf)
+          , errors      = es} <- readState state
 
     let l = length of_
-        splitIdx = if l > 20 then (l - 20) else 0
+        splitIdx = if l > count then (l - count) else 0
         chunks = splitAt of_ splitIdx
         scrollToId = case head cf of
                             Just (Tweet {id_str = x}) -> x
@@ -109,11 +61,12 @@ showOldTweets state = do
 
     case chunks of
         [newOf, historyFd] -> do
-            writeRef state $ State { oldFeed: OldFeed newOf
+            writeState state $ State { oldFeed:     OldFeed newOf
                                    , currentFeed: CurrentFeed $ historyFd ++ cf
-                                   , newFeed: (NewFeed nf) }
+                                   , newFeed:     (NewFeed nf)
+                                   , errors:      es }
 
-            render state
+            --render state
             forkPostpone (\_ -> scrollToEl scrollToId) 50
             pure unit
 
@@ -122,38 +75,29 @@ showOldTweets state = do
 
 --------------------------------------------------------------------------------
 
-historyButtonComponent :: ComponentClass {state :: RefVal State} {}
-historyButtonComponent = createClass spec { displayName = "historyButton", render = renderFun } where
+historyButton :: ComponentClass {state :: RefVal State} {}
+historyButton = createClass spec { displayName = "historyButton", render = renderFun } where
     renderFun this = pure $
         D.button { className: "history-button"
-                 , onClick: showOldTweets this.props.state
+                 , onClick: showOldTweets this.props.state 1
                  , id: "load-history-tweets-id"} [D.rawText "···"]
-
-renderHistoryButton :: forall eff. RefVal State ->
-                                 String ->
-                                 Eff (dom :: DOM, react :: React | eff) Component
-renderHistoryButton state_ targetId =
-    renderComponentById (historyButtonComponent {state: state_} []) targetId
 
 --------------------------------------------------------------------------------
 
-checkButtonComponent :: ComponentClass {count :: Number, state :: RefVal State} {}
-checkButtonComponent = createClass spec { displayName = "CheckButton", render = renderFun } where
-    renderFun this = pure $
-        D.button { className: aClass
-                 , onClick: loadTweetsFromState this.props.state
-                 , id: "load-new-tweets-id"} [D.rawText $ show this.props.count]
-        where
-            aClass = case this.props.count of
-               0 -> "no-new-tweets pop"
-               _ -> "there-are-new-tweets pop"
+checkButton :: ComponentClass {state :: RefVal State} {}
+checkButton = createClass spec { displayName = "CheckButton", render = renderFun } where
+    renderFun this = do
+      State { oldFeed = (OldFeed of_)
+            , newFeed = (NewFeed nf)
+            , currentFeed = (CurrentFeed cf)
+            , errors      = es } <- readState this.props.state
 
-renderCheckButton :: forall eff. RefVal State ->
-                                 String ->
-                                 Number ->
-                                 Eff (dom :: DOM, react :: React | eff) Component
-renderCheckButton state_ targetId count =
-    renderComponentById (checkButtonComponent {count: count, state: state_} []) targetId
+      let count = length nf
+
+      pure $
+        D.button { className: if count == 0 then "no-new-tweets pop" else "there-are-new-tweets pop"
+                 , onClick: showNewTweets this.props.state
+                 , id: "load-new-tweets-id"} [D.rawText $ show count]
 
 --------------------------------------------------------------------------------
 
@@ -164,40 +108,11 @@ renderCheckButton state_ targetId count =
 -- .filter(function(ys){ return ys.reduce(function(a,b){ return a + b }, 0) < 0 })
 -- .subscribe(function(x){console.log('^^^', x)})
 
-foreign import getDeltaY
-    """
-    function getDeltaY(e) { return e.originalEvent.deltaY }
-    """ :: forall a. a -> Number
-
-foreign import bufferWithTime
-    """
-    function bufferWithTime(time) {
-        return function(obs) {
-            return obs.bufferWithTime(time)
-        }
-    }
-    """ :: forall a. Number -> Rx.Observable a -> Rx.Observable [a]
-
-foreign import throttleWithTimeout
-    """
-    function throttleWithTimeout(time) {
-        return function(obs) {
-            return obs.throttleWithTimeout(time)
-        }
-    }
-    """ :: forall a. Number -> Rx.Observable a -> Rx.Observable a    
-
-foreign import getWheelObservable
-  """
-  function getWheelObservable(x) {
-    return Rx.Observable.fromEvent(document, 'wheel')
-  }
-  """ :: forall a b. b -> Rx.Observable a
-
 
 listenHistoryEvents state = obsE ~> handler
   where
   obsZ = getWheelObservable 1
+  --obsZ1 = (\ev -> targetId is "load-history-tweets-id") `filterRx` obsZ
   obsA = 200 `bufferWithTime` obsZ
   obsB = (\buf -> (length buf) > 1) `filterRx` obsA
   obsC = (\es  -> getDeltaY <$> es) <$> obsB
@@ -207,7 +122,7 @@ listenHistoryEvents state = obsE ~> handler
   handler x = do
     trace $ "got scroll up" ++ show x
     -- TODO check if document is on top
-    showOldTweets state
+    showOldTweets state 1
     pure unit
 
 
@@ -221,7 +136,7 @@ listenFeedKeys state = do
 
     where
     f _ = do
-        loadTweetsFromState state
+        showNewTweets state
         pure unit
 
 startWsClient :: forall r.  RefVal State
@@ -246,15 +161,16 @@ startWsClient state = do
             ts -> do
                 State { oldFeed = (OldFeed of_)
                       , currentFeed = (CurrentFeed cf)
-                      , newFeed = (NewFeed nf) } <- readRef state
+                      , newFeed = (NewFeed nf)
+                      , errors = es } <- readState state
                 let
                     newNewFeed = nf ++ ts
                     newTweetsCount = length newNewFeed
 
-                writeRef state $ State { oldFeed: OldFeed of_
+                writeState state $ State { oldFeed: OldFeed of_
                                        , currentFeed: CurrentFeed cf
-                                       , newFeed: NewFeed newNewFeed }
-                handleNewTweetsFromWs state newTweetsCount
+                                       , newFeed: NewFeed newNewFeed
+                                       , errors: es }
                 pure unit
 
             [] -> do
@@ -270,39 +186,6 @@ startWsClient state = do
             startWsClient state
             pure unit
 
-        handleNewTweetsFromWs state count = do
-            setTitle title
-            renderCheckButton state checkButtonContainerId count
-            where title = case count of
-                    1 -> "1 new tweet"
-                    x -> (show x) ++ " new tweets"
-
--- handleError :: forall e. String -> String -> Eff (dom :: DOM | e) Unit
-handleError t m = do
-    setTitle t
-    renderMessage messagesId m
-    hideLoader containerId
-    pure unit
-
---loadFeed :: forall eff. RefVal State -> Eff (dom :: DOM, react :: React | eff) Unit
---loadFeed state = do
---    setTitle "Loading..."
---    showLoader containerId
---    (rioGet updateUrl) ~> handleUpdate
---    pure unit
---
---    where
---        handleUpdate :: forall eff. String -> Eff (dom :: DOM, react :: React | eff) Unit
---        handleUpdate s = case (fromResponse s) of
---            ResponseError {errTitle = t, errMessage = m} -> do
---                handleError t m
---                pure unit
---
---            ResponseSuccess {okTitle = t', okTweets = ts} -> do
---                handleRenderTweets state
---                pure unit
-
-
 -- handleRetweetClick :: forall e. String -> Eff (trace :: Trace | e) Unit
 handleRetweetClick id_ = do
     let url = "/retweet/?id=" ++ id_
@@ -313,7 +196,7 @@ handleRetweetClick id_ = do
         -- retweetResultHandler :: forall e. AjaxResult -> Eff (react :: React, trace :: Trace | e) Unit
         retweetResultHandler resp = do
             trace $ "retweeted " ++ show (resp :: AjaxResult)
-            renderMessage messagesId "Retweeted :-)"
+            renderMessage messagesId $ [Success "Retweeted :-)"]
             pure unit
 
 -- handleStarClick :: forall e. String -> Eff (trace :: Trace | e) Unit
@@ -326,7 +209,7 @@ handleStarClick id_ = do
         -- starResultHandler :: forall e. AjaxResult -> Eff (dom :: DOM, trace :: Trace | e) Unit
         starResultHandler resp = do
             trace $ "starred " ++ show (resp :: AjaxResult)
-            renderMessage messagesId "Starred :-)"
+            renderMessage messagesId $ [Success "Starred :-)"]
             pure unit
 
 
@@ -334,6 +217,8 @@ feedClickHandler ev = do
     trace "got mouse click"
     trace $ toString ev
     pure unit
+
+--------------------------------------------------------------------------------
 
 processTweetElement :: Entities -> TweetElement -> TweetElement
 processTweetElement (Entities {urls=urls}) (Link u) = case matchUrl u of
@@ -466,16 +351,22 @@ tweetComponent = createClass spec { displayName = "Tweet" , render = renderFun }
                   , asHtml this.props.entities ]
 
 
-tweetsList :: ComponentClass {tweets :: [Tweet]} {}
+tweetsList :: ComponentClass {state :: RefVal State} {}
 tweetsList = createClass spec { displayName = "TweetsList", render = renderFun }
     where
-        renderFun this = case this.props.tweets of
+        renderFun this = do
+          State { oldFeed = (OldFeed of_)
+                      , newFeed = (NewFeed nf)
+                      , currentFeed = (CurrentFeed cf)
+                      , errors      = es } <- readState this.props.state
+
+          setTitle $ case length nf of
+            1 -> "1 new tweet"
+            x -> (show x) ++ " new tweets"
+
+          case cf of
             [] -> pure $ D.ul {id: "feed"
-                              , onClick: (\ev -> feedClickHandler ev)} [D.li { className: "no-tweets" } [D.rawText "No new tweets"]]
+                              , onClick: (\ev -> feedClickHandler ev)} [D.li { className: "no-tweets" } [D.rawText "EOF"]]
             _  -> pure $ D.ul { id: "feed"
                               , onClick: (\ev -> feedClickHandler ev)
-                              } $ asHtml <$> this.props.tweets
-
-renderTweets :: forall eff. String -> [Tweet] -> Eff (dom :: DOM, react :: React | eff) Component
-renderTweets targetId ts = renderComponentById (tweetsList {tweets: ts} []) targetId
-
+                              } $ asHtml <$> cf

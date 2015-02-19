@@ -1,6 +1,7 @@
 module Core where
 
 import Debug.Trace
+import Control.Monad.Eff.Ref
 import Control.Monad.Eff (Eff(..))
 import Data.Foreign
 import Data.Foreign.Class
@@ -21,7 +22,6 @@ import Utils
 import Types
 import Config
 
-import UI.Messages (renderMessage)
 import UI.LoaderIndicator (showLoader, hideLoader)
 
 
@@ -190,7 +190,6 @@ fromCheckResponse x = case (readJSON x :: F CheckResponse) of
 fromWsMessage :: String -> [Tweet]
 fromWsMessage s = case (readJSON s :: F [Tweet]) of
     Left err -> []
-
     Right ts -> ts
 
 --------------------------------------------------------------------------------
@@ -199,8 +198,18 @@ fromWsMessage s = case (readJSON s :: F [Tweet]) of
 initialState :: State
 initialState = State { oldFeed: OldFeed []
                      , currentFeed: CurrentFeed []
-                     , newFeed: NewFeed [] }
+                     , newFeed: NewFeed []
+                     , errors: [] }
 
+-- TODO get rid of singleton global state
+stateObservable = getNewObservable initialState
+
+readState = readRef
+
+writeState state value = do
+    writeRef state value
+    let x = publishToObservable stateObservable value
+    pure unit
 
 foreign import setTitle
     """

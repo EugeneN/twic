@@ -14,7 +14,7 @@ import qualified Control.Monad.JQuery as J
 
 import Config (writeTweetContainerId, messagesId)
 import Utils
-import Types (AjaxResult())
+import Types
 import UI.Messages (renderMessage)
 import UI.LoaderIndicator (showLoader)
 
@@ -49,7 +49,7 @@ handleSubmitTweet text = do
     where
     tweetResultHandler resp = do
         trace $ "tweeted " ++ show (resp :: AjaxResult)
-        renderMessage messagesId "Tweeted :-)"
+        renderMessage messagesId $ [Success "Tweeted :-)"]
         showWriteButton writeTweetContainerId
         pure unit
 
@@ -62,7 +62,7 @@ handleWriteKeyPress this k = do
 
     pure unit
 
-listenWriteKeys = do
+listenWriteKeys state = do
     bodyKeys <- J.select "body" >>= onAsObservable "keyup"
 
     let keyCodesS = keyEventToKeyCode <$> bodyKeys

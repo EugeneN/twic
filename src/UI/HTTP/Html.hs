@@ -129,25 +129,8 @@ htmlPage title_ body_ error_ = docTypeHtml $ do
       Just t  -> title t
     style $ toHtml CSS.allCss
 
-  body $ do
-    div_ ! class_ "error" ! A.id "messages" $ case error_ of
-                              Nothing -> mempty
-                              Just exp -> div_ ! class_ "error" $ exp
-
-    div_ ! A.id "load-history-container-id" $ mempty
-
-    div_ ! class_ "container" ! A.id "container" $
-      case body_ of
-          Nothing -> ""
-          Just b -> ul ! A.id "feed" $ b
-
-    div_ ! A.id "write-tweet-container-id" $ mempty
-
-    div_ ! class_ "refresh" ! A.id "refresh" $
-      H.button ! class_ "no-new-tweets pop"
-               ! A.id "load-new-tweets-id"
-               $ "0"
-
+  body ! A.id "body" $ do
+    div_ ! A.id "root" $ mempty
     H.script ! A.src "/cs/Main.js" ! A.type_ "text/javascript" $ mempty
 
 retweetToHtml :: Either (ApiError HttpException) Tweet -> Html

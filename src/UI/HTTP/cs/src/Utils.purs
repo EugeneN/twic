@@ -13,7 +13,6 @@ import Rx.JQuery
 
 import Types
 
-
 import Data.Either
 import Data.Monoid
 import Data.Array (length, reverse)
@@ -25,10 +24,10 @@ import qualified Network.XHR.Types as XT
 
 
 foreign import toString
-    "function toString(a){                \
-    \    console.log('toString:', a);     \
-    \    return a.toString();             \
-    \} " :: forall a. a -> String
+    """function toString(a){                
+        console.log('toString:', a);     
+        return a.toString();             
+    } """ :: forall a. a -> String
 
 foreign import readInt
     """function readInt(a){
@@ -44,26 +43,26 @@ foreign import isNumeric
 
 
 foreign import scrollToTop
-    "function scrollToTop() {             \
-    \       console.log('scroll to top'); \
-    \       window.scroll(0,0);           \
-    \       return undefined;             \
-    \}" :: forall eff. (Eff (dom :: DOM | eff) Unit)
+    """function scrollToTop() {             
+           console.log('scroll to top'); 
+           window.scroll(0,0);           
+           return undefined;             
+    }""" :: forall eff. (Eff (dom :: DOM | eff) Unit)
 
 foreign import jsonStringify
-    "function jsonStringify(o) {\
-    \  return JSON.stringify(o);\
-    \}" :: forall r. { | r} -> String
+    """function jsonStringify(o) {
+      return JSON.stringify(o);
+    }""" :: forall r. { | r} -> String
 
 foreign import extractTarget
-    "function extractTarget(ev){ \
-    \    return ev.target;       \
-    \} " :: J.JQueryEvent -> HTMLElement
+    """function extractTarget(ev){
+        return ev.target;
+    } """ :: J.JQueryEvent -> HTMLElement
 
 foreign import extractCoords
-    "function extractCoords(ev){            \
-    \    return [ev.clientX, ev.clientY];   \
-    \} " :: J.JQueryEvent -> [Number]
+    """function extractCoords(ev){
+        return [ev.clientX, ev.clientY];
+    } """ :: J.JQueryEvent -> [Number]
 
 foreign import rioGet
     """
@@ -150,12 +149,102 @@ startAppBus state = do
     pure unit
 
 foreign import value
-    "function value(el) {\
-    \  return el.value;\
-    \}" :: Element -> String
+    """
+    function value(el) {
+      return el.value;
+    }""" :: Element -> String
 
 foreign import setFocus "function setFocus(id) { return function() { jQuery('#' + id).focus(); }}" :: forall eff. String -> Eff eff Unit
 foreign import which "function which(ev) { return ev.which; }" :: forall a. a -> Number
+
+foreign import scrollToEl
+    """
+    function scrollToEl(id){
+        console.log("scroll to", id, document.getElementById(id));
+        document.getElementById(id).scrollIntoView(true) }
+    """ :: forall eff. String -> (Eff (dom :: DOM | eff) Unit)
+
+foreign import data Timeout :: !
+
+foreign import forkPostpone
+    """
+    function forkPostpone(f) {
+        return function(delay) {
+            return function() {
+                console.log("postponing ", f, delay)
+                setTimeout(f, delay);
+            }
+        }
+    }
+    """ :: forall a eff. a -> Number -> Eff (|eff) Unit
+
+foreign import splitAt
+    """
+    function splitAt(as) {
+        return function(idx) {
+            return [as.slice(0, idx), as.slice(idx)]
+        }
+    }
+    """ :: forall a. [a] -> Number -> [[a]]
+
+
+foreign import getDeltaY
+    """
+    function getDeltaY(e) { return e.originalEvent.deltaY }
+    """ :: forall a. a -> Number
+
+foreign import bufferWithTime
+    """
+    function bufferWithTime(time) {
+        return function(obs) {
+            return obs.bufferWithTime(time)
+        }
+    }
+    """ :: forall a. Number -> Rx.Observable a -> Rx.Observable [a]
+
+foreign import throttleWithTimeout
+    """
+    function throttleWithTimeout(time) {
+        return function(obs) {
+            return obs.throttleWithTimeout(time)
+        }
+    }
+    """ :: forall a. Number -> Rx.Observable a -> Rx.Observable a
+
+foreign import getWheelObservable
+  """
+  function getWheelObservable(x) {
+    return Rx.Observable.fromEvent(document, 'wheel')
+  }
+  """ :: forall a b. b -> Rx.Observable a
+
+foreign import getNewObservable
+    """
+    function getNewObservable(x) {
+        return new Rx.Subject()
+    }
+    """ :: forall a b. a -> Rx.Observable b
+
+foreign import publishToObservable
+    """
+    function publishToObservable(obs){
+        return function (val) {
+                obs.onNext(val)
+        }
+    }
+    """ :: forall a b. Rx.Observable a -> b -> Rx.Observable a
+
+foreign import setProps
+    """
+    function setProps(view) {
+        return function(props) {
+            return function(){
+                view.setProps(props)
+                return null
+            }
+        }
+    }
+    """ :: forall a eff. a -> RefVal State ->  Eff (dom :: DOM, react :: React | eff) Unit
 
 data KeyCode = Insert
              | Escape

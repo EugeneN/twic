@@ -16,9 +16,12 @@ newtype OldFeed     = OldFeed [Tweet]
 newtype CurrentFeed = CurrentFeed [Tweet]
 newtype NewFeed     = NewFeed [Tweet]
 
+data    Error       = Error String | Success String | Other String
+
 data State = State { oldFeed     :: OldFeed
                    , currentFeed :: CurrentFeed
-                   , newFeed     :: NewFeed }
+                   , newFeed     :: NewFeed
+                   , errors      :: [Error] }
 
 
 data TweetElement = AtUsername String
