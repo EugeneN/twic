@@ -3,7 +3,7 @@
 module UI.HTTP.App where
 
 import           BL.Core                             (getStatus, retweetUrl,
-                                                      saveLastSeen,
+                                                      saveLastSeen, readHistory,
                                                       saveLastSeenAsync,
                                                       starUrl, tweetUrl,
                                                       updateFeed, writeApi)
@@ -92,6 +92,7 @@ httpapp st db request sendResponse = do
         "star"          -> starHandler request sendResponse
         "tweet"         -> tweetHandler request sendResponse
         "stat"          -> statHandler st db request sendResponse
+        "history"       -> historyHandler request sendResponse
         _               -> notFoundHandler request sendResponse
 
 makeClient :: UUID -> WS.Connection -> Client
@@ -223,6 +224,25 @@ starHandler request response = case queryString request of
         starStream :: TweetId -> (Builder -> IO ()) -> IO () -> IO ()
         starStream id_ send flush =
             writeApi (starUrl id_) >>= send . starToJson >> flush
+
+historyHandler :: Application
+historyHandler request response = case queryString request of
+    [("maxid", Just id_), ("count", Just count)] -> case B8.readInteger id_ of
+          Just (int_id, str) -> do
+            debug $ "got history request with maxid " ++ show int_id ++ " and count " ++ show count
+            response $ responseStream status200 [mimeJSON] (historyStream (fromIntegral int_id :: Int64))
+
+          Nothing -> do
+            error ("bad history maxid" :: String)
+            response $ responseLBS status200 [mimeJSON] "bad history id"
+
+    _ -> response $ responseLBS status200 [mimeJSON] "bad request"
+
+    where
+        historyStream :: TweetId -> (Builder -> IO ()) -> IO () -> IO ()
+        historyStream id_ send flush =
+            readHistory id_ 20 >>= send . justTweetsToJson >> flush
+
 
 tweetHandler :: Application
 tweetHandler request response = case queryString request of

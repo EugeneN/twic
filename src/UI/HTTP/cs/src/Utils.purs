@@ -278,3 +278,58 @@ instance eqKeyCode :: Eq KeyCode where
 
     (/=) a      b      = not $ (==) a b
 
+
+
+instance eqUUID :: Eq UUID where
+    (==) ident ident' = showuuid ident == showuuid ident'
+    (/=) ident ident' = not (ident == ident')
+
+instance showUUID :: Show UUID where
+    show ident = showuuid ident
+
+foreign import showuuid
+    """
+    function showuuid(ident) {
+      return ident.toString();
+    }""" :: UUID -> String
+
+foreign import runUUID
+    """
+    function runUUID(UUID) {
+      return UUID();
+    }""" :: Eff (uuid :: UUIDEff) UUID -> UUID
+
+foreign import getUUID
+    """
+    function getUUID() {
+      var i, itoh, s, t, _i;
+      s = [];
+      itoh = '0123456789ABCDEF'.split('');
+      s = (function() {
+        var _i, _results;
+        _results = [];
+        for (i = _i = 0; _i <= 35; i = ++_i) {
+          _results.push(Math.floor(Math.random() * 0x10));
+        }
+        return _results;
+      })();
+      t = (new Date()).getTime() & 0x7FFFFFFF;
+      for (i = _i = 0; _i <= 3; i = ++_i) {
+        s[i] = t & 0xF;
+        t >>= 8;
+      }
+      s[14] = 4;
+      s[19] = (s[19] & 0x3) | 0x8;
+      s = (function() {
+        var _j, _len, _results;
+        _results = [];
+        for (_j = 0, _len = s.length; _j < _len; _j++) {
+          i = s[_j];
+          _results.push(itoh[s[i]]);
+        }
+        return _results;
+      })();
+      s[8] = s[13] = s[18] = s[23] = '-';
+      return s.join('');
+    };
+    """ :: forall eff. Eff (uuid :: UUIDEff | eff) UUID

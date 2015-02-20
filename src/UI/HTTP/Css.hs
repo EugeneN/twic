@@ -303,6 +303,16 @@ bodyCss = do
     height (px 25)
     borderRadius (pct 50) (pct 50) (pct 50) (pct 50)
 
+    ".disabled" ? do
+        color white
+        background red
+        border solid (px 1) red
+
+    ".disabled" # hover ? do
+        color gray
+        background transparent
+        border solid (px 1) transparent
+
   ".history-button" # hover ? do
     color black
 --     boxShadow 0 0 (px 4) (setA 50 baseColor)

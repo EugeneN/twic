@@ -27,7 +27,7 @@ rootLayout =
       pure $
         D.div { className: "root-layout" } [
             D.div { className:  "error" , id: "messages" } [
-              (errorsList {messages: es} [])]
+              (errorsList {state: this.props.state} [])]
 
           , D.div { id: "load-history-container-id" } [
               (historyButton {state: this.props.state} [])]

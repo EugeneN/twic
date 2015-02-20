@@ -25,6 +25,7 @@ module BL.Core (
   , retweetUrl
   , getRunTime
   , tweetUrl
+  , readHistory
   , getStatus
   , writeApi
   , readApi
@@ -310,6 +311,15 @@ homeTimelineSinceCount tid count = HomeTimeline $
   "https://api.twitter.com/1.1/statuses/home_timeline.json?since_id="
   ++ show tid ++ "&count=" ++ show count
 
+homeTimelineMaxidCount :: TweetId -> Int -> Feed
+homeTimelineMaxidCount 0 0 = HomeTimeline $
+    "https://api.twitter.com/1.1/statuses/home_timeline.json?count=20"
+homeTimelineMaxidCount tid 0 = HomeTimeline $
+    "https://api.twitter.com/1.1/statuses/home_timeline.json?count=20&max_id=" ++ show tid
+homeTimelineMaxidCount 0 count = HomeTimeline $
+    "https://api.twitter.com/1.1/statuses/home_timeline.json?count=" ++ show count
+homeTimelineMaxidCount tid count = HomeTimeline $
+    "https://api.twitter.com/1.1/statuses/home_timeline.json?count=" ++ show count ++ "&max_id=" ++ show tid
 
 getUpdateFeedUrl :: DL.MyDb -> IO Feed
 getUpdateFeedUrl db = do
@@ -350,6 +360,11 @@ handleIncomingTweets _ fv ts = do
         Just oldts -> putMVar fv $ oldts ++ ts
         Nothing    -> putMVar fv ts
 
+readHistory :: TweetId -> Int -> IO (Either (ApiError HttpException) [Tweet])
+readHistory maxid count = do
+    info $ "reading history where maxid=" ++ show maxid ++ " and count=" ++ show count
+    (_, res) <- readApi $ homeTimelineMaxidCount maxid count
+    return res
 
 updateFeed :: MVar UTCTime -> IO ()
 updateFeed uv = do

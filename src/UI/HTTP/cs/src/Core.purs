@@ -199,6 +199,7 @@ initialState :: State
 initialState = State { oldFeed: OldFeed []
                      , currentFeed: CurrentFeed []
                      , newFeed: NewFeed []
+                     , historyButtonDisabled: false
                      , errors: [] }
 
 -- TODO get rid of singleton global state

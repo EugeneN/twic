@@ -15,7 +15,6 @@ import qualified Control.Monad.JQuery as J
 import Config (writeTweetContainerId, messagesId)
 import Utils
 import Types
-import UI.Messages (renderMessage)
 import UI.LoaderIndicator (showLoader)
 
 
@@ -49,7 +48,7 @@ handleSubmitTweet text = do
     where
     tweetResultHandler resp = do
         trace $ "tweeted " ++ show (resp :: AjaxResult)
-        renderMessage messagesId $ [Success "Tweeted :-)"]
+        --renderMessage messagesId $ [Success "Tweeted :-)"]
         showWriteButton writeTweetContainerId
         pure unit
 

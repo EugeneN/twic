@@ -7,15 +7,37 @@ import qualified React.DOM as D
 import React (createClass, renderComponentById, spec)
 import React.Types (Component(), ComponentClass(),  React())
 import Types
+import Core (readState, writeState)
 import Data.Array
+import Control.Monad.Eff.Ref
+import Utils
 
 
+hideMessage state msgid = do
+    State { oldFeed     = of_
+          , currentFeed = cf
+          , newFeed     = nf
+          , historyButtonDisabled = hbd
+          , errors      = es } <- readState state
 
-errorItem (Error msg) = D.div {className: "message"} [D.rawText msg]
+    writeState state $ State { oldFeed:     of_
+                             , currentFeed: cf
+                             , newFeed:     nf
+                             , historyButtonDisabled: hbd
+                             , errors:      filter (\(Error _ msgid') -> msgid' /= msgid) es }
+    pure unit
 
-errorsList :: ComponentClass {messages :: [Error]} {}
+errorItem state (Error msg msgid) =
+  D.div {className: "message"} [
+      D.span {} [D.rawText msg]
+    , D.button { onClick: \e -> hideMessage state msgid } [D.rawText "x"]]
+
+errorsList :: ComponentClass { state :: RefVal State } {}
 errorsList = createClass spec { displayName = "Messages", render = renderFun } where
-    renderFun this = pure $ D.div {className: "messages"} $ errorItem <$> this.props.messages
+    renderFun this = do
+        State { oldFeed     = _
+              , newFeed     = _
+              , currentFeed = _
+              , errors      = es } <- readState this.props.state
 
-renderMessage :: forall eff. String -> [Error] -> Eff (dom :: DOM, react :: React | eff) Component
-renderMessage targetId es = renderComponentById (errorsList {messages: es} []) targetId
+        pure $ D.div {className: "messages"} $ (errorItem this.props.state) <$> es

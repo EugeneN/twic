@@ -4,6 +4,7 @@ import Data.Maybe
 import Control.Monad.Eff (Eff(..))
 
 type TweetId = Number
+type TweetIdS = String
 type Url = String
 
 -- class AppModule a where
@@ -12,16 +13,25 @@ type Url = String
 
 -- data AppModuleArgs = {}
 
+foreign import data UUID :: *
+foreign import data UUIDEff :: !
+
 newtype OldFeed     = OldFeed [Tweet]
 newtype CurrentFeed = CurrentFeed [Tweet]
 newtype NewFeed     = NewFeed [Tweet]
 
-data    Error       = Error String | Success String | Other String
+type Msgid = UUID
+
+data Error = Error   String Msgid
+           | Success String Msgid
+           | Other   String Msgid
+
 
 data State = State { oldFeed     :: OldFeed
                    , currentFeed :: CurrentFeed
                    , newFeed     :: NewFeed
-                   , errors      :: [Error] }
+                   , errors      :: [Error]
+                   , historyButtonDisabled :: Boolean }
 
 
 data TweetElement = AtUsername String

@@ -19,12 +19,11 @@ import Rx.JQuery
 import qualified Control.Monad.JQuery as J
 
 import qualified Lib.WebSocket as WS
-import Config (checkButtonContainerId, messagesId, containerId, socketUrl, updateUrl)
+import Config (checkButtonContainerId, messagesId, containerId, socketUrl, historyUrl)
 import Core
 import Utils
 import Types
 import UI.Types
-import UI.Messages (renderMessage)
 import UI.LoaderIndicator (hideLoader, showLoader)
 
 showNewTweets :: forall eff. RefVal State
@@ -33,54 +32,162 @@ showNewTweets state = do
     State { oldFeed     = (OldFeed of_)
           , currentFeed = (CurrentFeed cf)
           , newFeed     = (NewFeed nf)
+          , historyButtonDisabled = hbd
           , errors      = es } <- readState state
 
     writeState state $ State { oldFeed:     OldFeed $ of_ ++ cf
-                           , currentFeed: CurrentFeed nf
-                           , newFeed:     NewFeed []
-                           , errors:      es}
+                             , currentFeed: CurrentFeed nf
+                             , newFeed:     NewFeed []
+                             , historyButtonDisabled: hbd
+                             , errors:      es}
 
     scrollToTop
     pure unit
 
 showOldTweets :: forall eff. RefVal State
                           -> Number
-                          -> Eff (ref :: Ref, dom :: DOM, react :: React | eff) Unit
+                          -> Eff (trace :: Trace, ref :: Ref, dom :: DOM, react :: React | eff) Unit
 showOldTweets state count = do
     State { oldFeed     = (OldFeed of_)
           , currentFeed = (CurrentFeed cf)
           , newFeed     = (NewFeed nf)
+          , historyButtonDisabled = hbd
           , errors      = es} <- readState state
 
     let l = length of_
         splitIdx = if l > count then (l - count) else 0
         chunks = splitAt of_ splitIdx
-        scrollToId = case head cf of
-                            Just (Tweet {id_str = x}) -> x
-                            Nothing -> "feed"
 
     case chunks of
         [newOf, historyFd] -> do
             writeState state $ State { oldFeed:     OldFeed newOf
-                                   , currentFeed: CurrentFeed $ historyFd ++ cf
-                                   , newFeed:     (NewFeed nf)
-                                   , errors:      es }
+                                     , currentFeed: CurrentFeed $ historyFd ++ cf
+                                     , newFeed:     (NewFeed nf)
+                                     , historyButtonDisabled: hbd
+                                     , errors:      es }
 
-            --render state
-            forkPostpone (\_ -> scrollToEl scrollToId) 50
+            let maxid = case head newOf of
+                            Just (Tweet {id_str = x}) -> x
+                            Nothing -> case head historyFd of
+                                Just (Tweet {id_str = y}) -> y
+                                Nothing -> case head nf of
+                                    Just (Tweet {id_str = z}) -> z
+                                    Nothing -> "0"
+
+            trace $ "maybe loading history w/ maxid=" ++  maxid
+            maybeLoadMoreHistory state (length newOf) maxid
+
             pure unit
 
         _ -> pure unit
+
+onError state title message = do
+    State { oldFeed     = of_
+          , currentFeed = cf
+          , newFeed     = nf
+          , historyButtonDisabled = hbd
+          , errors      = es } <- readState state
+
+    let uuid = runUUID $ getUUID
+
+    writeState state $ State { oldFeed:     of_
+                             , currentFeed: cf
+                             , newFeed:     nf
+                             , historyButtonDisabled: hbd
+                             , errors:      es ++ [Error message uuid] }
+
+
+onHistoryTweets :: forall eff. RefVal State -> [Tweet] -> Eff ( trace :: Trace, ref :: Ref | eff ) Unit
+onHistoryTweets _ [] = do
+    trace "got no history tweets"
     pure unit
 
+onHistoryTweets state ts = do
+    State { oldFeed =     (OldFeed of_)
+          , currentFeed = cf
+          , newFeed =     nf
+          , historyButtonDisabled = hbd
+          , errors =      es } <- readState state
+
+    writeState state $ State { oldFeed: OldFeed $ (reverse ts) ++ of_
+                             , currentFeed: cf
+                             , newFeed: nf
+                             , historyButtonDisabled: hbd
+                             , errors: es }
+    pure unit
+
+onNewTweets :: forall eff. RefVal State -> [Tweet] -> Eff ( trace :: Trace, ref :: Ref | eff ) Unit
+onNewTweets _ [] = do
+    trace "got no tweets"
+    pure unit
+
+onNewTweets state ts = do
+    State { oldFeed =     (OldFeed of_)
+          , currentFeed = (CurrentFeed cf)
+          , newFeed =     (NewFeed nf)
+          , historyButtonDisabled = hbd
+          , errors =      es } <- readState state
+
+    writeState state $ State { oldFeed: OldFeed of_
+                             , currentFeed: CurrentFeed cf
+                             , newFeed: NewFeed $ nf ++ ts
+                             , historyButtonDisabled: hbd
+                             , errors: es }
+    pure unit
+
+getHistoryUrl :: TweetIdS -> Number -> String
+getHistoryUrl maxid count = historyUrl ++ "?maxid=" ++ maxid ++ "&count=" ++ show count
+
+maybeLoadMoreHistory :: forall eff. RefVal State
+                                 -> Number
+                                 -> TweetIdS
+                                 -> Eff (trace :: Trace, ref :: Ref | eff) Unit
+maybeLoadMoreHistory state count tid | count == 0 = do
+    disableHistoryButton state
+    (rioGet (getHistoryUrl tid 20)) ~> handleUpdate
+
+    where
+    handleUpdate s = case (fromResponse s) of
+        ResponseError {errTitle = t, errMessage = m} -> do
+            enableHistoryButton state
+            onError state t m
+            pure unit
+
+        ResponseSuccess {okTitle = t, okTweets = ts} -> do
+            enableHistoryButton state
+            -- TODO filter out item with id=`tid` from result
+            onHistoryTweets state ts
+            pure unit
+
+maybeLoadMoreHistory _ _ _ = pure unit
+
+enableHistoryButton = toggleHistoryButton false
+disableHistoryButton = toggleHistoryButton true
+
+toggleHistoryButton x state = do
+    State { oldFeed =     of_
+          , currentFeed = cf
+          , newFeed =     nf
+          , historyButtonDisabled = _
+          , errors =      es } <- readState state
+
+    writeState state $ State { oldFeed:     of_
+                             , currentFeed: cf
+                             , newFeed:     nf
+                             , historyButtonDisabled: x
+                             , errors:      es }
 --------------------------------------------------------------------------------
 
 historyButton :: ComponentClass {state :: RefVal State} {}
 historyButton = createClass spec { displayName = "historyButton", render = renderFun } where
-    renderFun this = pure $
-        D.button { className: "history-button"
-                 , onClick: showOldTweets this.props.state 1
-                 , id: "load-history-tweets-id"} [D.rawText "···"]
+    renderFun this = do
+        State { historyButtonDisabled = hbd } <- readState this.props.state
+
+        pure $
+            D.button { className: if hbd then "history-button disabled" else "history-button"
+                     , onClick: showOldTweets this.props.state 1
+                     , "disabled": if hbd then "disabled" else ""
+                     , id: "load-history-tweets-id"} [D.rawText "···"]
 
 --------------------------------------------------------------------------------
 
@@ -157,25 +264,7 @@ startWsClient state = do
     pure unit
 
     where
-        onMessage msg = case fromWsMessage msg of
-            ts -> do
-                State { oldFeed = (OldFeed of_)
-                      , currentFeed = (CurrentFeed cf)
-                      , newFeed = (NewFeed nf)
-                      , errors = es } <- readState state
-                let
-                    newNewFeed = nf ++ ts
-                    newTweetsCount = length newNewFeed
-
-                writeState state $ State { oldFeed: OldFeed of_
-                                       , currentFeed: CurrentFeed cf
-                                       , newFeed: NewFeed newNewFeed
-                                       , errors: es }
-                pure unit
-
-            [] -> do
-                trace "got no tweets"
-                pure unit
+        onMessage m = onNewTweets state $ fromWsMessage m
 
         onError = do
             trace $ "ws error"
@@ -196,7 +285,7 @@ handleRetweetClick id_ = do
         -- retweetResultHandler :: forall e. AjaxResult -> Eff (react :: React, trace :: Trace | e) Unit
         retweetResultHandler resp = do
             trace $ "retweeted " ++ show (resp :: AjaxResult)
-            renderMessage messagesId $ [Success "Retweeted :-)"]
+            --renderMessage messagesId $ [Success "Retweeted :-)"]
             pure unit
 
 -- handleStarClick :: forall e. String -> Eff (trace :: Trace | e) Unit
@@ -209,7 +298,7 @@ handleStarClick id_ = do
         -- starResultHandler :: forall e. AjaxResult -> Eff (dom :: DOM, trace :: Trace | e) Unit
         starResultHandler resp = do
             trace $ "starred " ++ show (resp :: AjaxResult)
-            renderMessage messagesId $ [Success "Starred :-)"]
+            --renderMessage messagesId $ [Success "Starred :-)"]
             pure unit
 
 
