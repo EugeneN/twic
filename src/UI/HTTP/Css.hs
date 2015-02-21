@@ -203,7 +203,7 @@ bodyCss = do
         fontSize (px 20)
         cursor pointer
         boxShadow 0 0 (px 4) (setA 50 baseColor)
-        background grey
+        background lightgray
         transition "all" (ms 100) linear (ms 100)
 
     ".there-are-new-tweets" # focus ? do
@@ -313,14 +313,19 @@ bodyCss = do
         background transparent
         border solid (px 1) transparent
 
-  ".history-button" # hover ? do
-    color black
+  --".history-button" # hover ? do
+    --color black
 --     boxShadow 0 0 (px 4) (setA 50 baseColor)
-    background lightgreen
-    border solid (px 1) lightgreen
+    --background lightgreen
+    --border solid (px 1) lightgreen
 
   ".history-button" # focus ? do
     outline solid (px 0) baseColor
+
+  ".remove-message" ? do
+    marginLeft (px 5)
+    border solid (px 0) transparent
+    cursor pointer
 
   ".write-tweet" ? do
     position fixed

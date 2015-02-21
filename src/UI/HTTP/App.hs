@@ -86,6 +86,7 @@ httpapp st db request sendResponse = do
 
     ["cs", "Main.js"]   -> staticHandler [mimeJs] "dist/cs/Main.js" request sendResponse
     ["favicon.ico"]     -> staticHandler [mimeIco] "res/favicon.ico" request sendResponse
+    ["snake-loader.gif"] -> staticHandler [mimeIco] "res/snake-loader.gif" request sendResponse
 
     path                -> case Prelude.head path of
         "retweet"       -> retweetHandler request sendResponse

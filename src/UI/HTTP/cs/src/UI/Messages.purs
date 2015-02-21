@@ -13,6 +13,7 @@ import Control.Monad.Eff.Ref
 import Utils
 
 
+hideMessage :: forall eff. RefVal State -> Msgid -> Eff (ref :: Ref | eff) Unit
 hideMessage state msgid = do
     State { oldFeed     = of_
           , currentFeed = cf
@@ -30,7 +31,8 @@ hideMessage state msgid = do
 errorItem state (Error msg msgid) =
   D.div {className: "message"} [
       D.span {} [D.rawText msg]
-    , D.button { onClick: \e -> hideMessage state msgid } [D.rawText "x"]]
+    , D.button { className: "remove-message"
+               , onClick: hideMessage state msgid } [D.rawText "x"]]
 
 errorsList :: ComponentClass { state :: RefVal State } {}
 errorsList = createClass spec { displayName = "Messages", render = renderFun } where

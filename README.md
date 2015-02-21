@@ -34,13 +34,21 @@ Compare with the original Twitter UI:
 
 # Run
 
-Go to https://apps.twitter.com/ and create a new app, consumer key and access token. Access level may be read only, or read and write if you would like to make a retweets. Then run this in a shell:
+Go to https://apps.twitter.com/ and create a new app, consumer key and access token. Access level may be read only, or read and write if you would like to make a retweets.
+
+Go to https://www.firebase.com/signup/ and create a free account, then create an app or use the one provided by default. This cloud database is used to sync feed state between all the instances of the application you'll run.
+
+Then run this in a shell:
 
 ```
 $ git clone https://github.com/EugeneN/twic.git
 $ cd twic
 ```
-Put *Consumer Key (API Key)*, *Consumer Secret (API Secret)*, *Access Token*, *Access Token Secret* into a `Config.hs` file. Run next commands:
+Put *Consumer Key (API Key)*, *Consumer Secret (API Secret)*, *Access Token*, *Access Token Secret* into a `Config.hs` file.
+
+Put *Firebaseio's app url* into a `Config.hs` file.
+
+Run next commands:
 
 ```
 $ cabal sandbox init

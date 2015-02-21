@@ -141,7 +141,7 @@ getHistoryUrl maxid count = historyUrl ++ "?maxid=" ++ maxid ++ "&count=" ++ sho
 maybeLoadMoreHistory :: forall eff. RefVal State
                                  -> Number
                                  -> TweetIdS
-                                 -> Eff (trace :: Trace, ref :: Ref | eff) Unit
+                                 -> Eff (trace :: Trace, ref :: Ref, react :: React, dom :: DOM | eff) Unit
 maybeLoadMoreHistory state count tid | count == 0 = do
     disableHistoryButton state
     (rioGet (getHistoryUrl tid 20)) ~> handleUpdate
@@ -157,6 +157,7 @@ maybeLoadMoreHistory state count tid | count == 0 = do
             enableHistoryButton state
             -- TODO filter out item with id=`tid` from result
             onHistoryTweets state ts
+            showOldTweets state 1
             pure unit
 
 maybeLoadMoreHistory _ _ _ = pure unit
@@ -187,7 +188,9 @@ historyButton = createClass spec { displayName = "historyButton", render = rende
             D.button { className: if hbd then "history-button disabled" else "history-button"
                      , onClick: showOldTweets this.props.state 1
                      , "disabled": if hbd then "disabled" else ""
-                     , id: "load-history-tweets-id"} [D.rawText "···"]
+                     , id: "load-history-tweets-id"} [ if hbd
+                        then (D.img {src: "/snake-loader.gif"} [])
+                        else (D.rawText "···")]
 
 --------------------------------------------------------------------------------
 
