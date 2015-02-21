@@ -14,7 +14,7 @@ Twic is a simple reader of a Twitter user's home feed. It's main goal is a searc
 
 - read tweets are not shown. Once a user reads to the bottom of the feed he/she sees a Refresh button with a count of new, yet unread tweets. After clicking on the button the old, already seen tweets are replaced with new ones;
 
-- the Refresh button is grey if there are no new tweets in a feed, or orange if there are new itwems;
+- the Refresh button is grey if there are no new tweets in a feed, or orange if there are new itwems - a one blick one click usage pattern;
 
 - font size is reasonably larger;
 
@@ -24,13 +24,17 @@ Twic is a simple reader of a Twitter user's home feed. It's main goal is a searc
 
 - uses Twitter streaming API and websockets and client side storage to provide instant and real time reaction for user input;
 
-- gentle animations here and there to exploit user's muscle memory and continuity feeling.
+- gentle animations here and there to exploit user's muscle memory and continuity feeling;
+
+- can be operated using only a mouse, or only a keyboard, or both - either way with minimal amount of actions required.  
 
 All the checks and feed tracking are done automatically and are invisible for the user. Thus user has a very simple workflow - if the single button in the UI is orange, then he/she may click on it and get new tweets. The button becomes grey until next tweets will be available.
 
 Compare with the original Twitter UI:
 
 <img src="res/compare.png" style="width: 600px;"/>
+
+Twic has also a more advanced features - posting new tweets, retweeting, starring tweets, replying, old feed view up to the beginning. Filtered feed views and conversation views are planned.  
 
 # Run
 
