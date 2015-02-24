@@ -22,6 +22,7 @@
      , "react":                           "~0.11.0"
      , "purescript-react":                "joneshf/purescript-react#simplify"
      , "purescript-refs":                 "*"
+     , "purescript-lens":                 "*"
    },
   "ignore": [
       "**/.*"

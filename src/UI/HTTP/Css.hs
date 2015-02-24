@@ -347,6 +347,16 @@ bodyCss = do
       padding (px 7) (px 11) (px 7) (px 11)
 
 
+  ".red" ? do
+    color red
+
+  ".green" ? do
+    color green
+
+  ".blue" ? do
+    color blue
+
+
 
 usernameCss :: Css
 usernameCss = ".user-name" ? do

@@ -15,24 +15,6 @@ import Core
 import Utils
 import Data.Maybe
 
-resetContextMenu state e = do
-    State { oldFeed =     of_
-          , currentFeed = cf
-          , newFeed =     nf
-          , historyButtonDisabled = hbd
-          , contextMenu = _
-          , errors =      es } <- readState state
-
-    writeState state $ State { oldFeed:     of_
-                             , currentFeed: cf
-                             , newFeed:     nf
-                             , historyButtonDisabled: hbd
-                             , contextMenu: ContextMenu { visible: false
-                                                        , x: 0
-                                                        , y: 0
-                                                        , tweetId: Nothing }
-                             , errors:      es }
-    pure unit
 
 rootLayout :: ComponentClass { state :: RefVal State } {}
 rootLayout =

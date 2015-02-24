@@ -25,6 +25,7 @@ import Utils
 import Types
 import UI.Types
 import UI.LoaderIndicator (hideLoader, showLoader)
+import Optic.Core ( (.~), (^.))
 
 showNewTweets :: forall eff. RefVal State
                           -> Eff (ref :: Ref, dom :: DOM, react :: React | eff) Unit
@@ -94,20 +95,8 @@ onHistoryTweets _ [] = do
     pure unit
 
 onHistoryTweets state ts = do
-    State { oldFeed =     (OldFeed of_)
-          , currentFeed = cf
-          , newFeed =     nf
-          , historyButtonDisabled = hbd
-          , contextMenu = ctxm
-          , errors =      es } <- readState state
-
-    writeState state $ State { oldFeed: OldFeed $ (reverse ts) ++ of_
-                             , currentFeed: cf
-                             , newFeed: nf
-                             , historyButtonDisabled: hbd
-                             , contextMenu: ctxm
-                             , errors: es }
-    pure unit
+    s <- readState state
+    writeState state (s # oldFeedL .~ ((OldFeed (reverse ts)) ++ (s ^. oldFeedL)))
 
 onNewTweets :: forall eff. RefVal State -> [Tweet] -> Eff ( trace :: Trace, ref :: Ref | eff ) Unit
 onNewTweets _ [] = do
@@ -115,20 +104,8 @@ onNewTweets _ [] = do
     pure unit
 
 onNewTweets state ts = do
-    State { oldFeed =     (OldFeed of_)
-          , currentFeed = (CurrentFeed cf)
-          , newFeed =     (NewFeed nf)
-          , historyButtonDisabled = hbd
-          , contextMenu = ctxm
-          , errors =      es } <- readState state
-
-    writeState state $ State { oldFeed: OldFeed of_
-                             , currentFeed: CurrentFeed cf
-                             , newFeed: NewFeed $ nf ++ ts
-                             , historyButtonDisabled: hbd
-                             , contextMenu: ctxm
-                             , errors: es }
-    pure unit
+    s <- readState state
+    writeState state (s # newFeedL .~ ((s ^. newFeedL) ++ (NewFeed ts)))
 
 getHistoryUrl :: TweetIdS -> Number -> String
 getHistoryUrl maxid count = historyUrl ++ "?maxid=" ++ maxid ++ "&count=" ++ show count
@@ -161,19 +138,9 @@ enableHistoryButton = toggleHistoryButton false
 disableHistoryButton = toggleHistoryButton true
 
 toggleHistoryButton x state = do
-    State { oldFeed =     of_
-          , currentFeed = cf
-          , newFeed =     nf
-          , historyButtonDisabled = _
-          , contextMenu = ctxm
-          , errors =      es } <- readState state
+    s <- readState state
+    writeState state (s # hbdL .~ x)
 
-    writeState state $ State { oldFeed:     of_
-                             , currentFeed: cf
-                             , newFeed:     nf
-                             , historyButtonDisabled: x
-                             , contextMenu: ctxm
-                             , errors:      es }
 --------------------------------------------------------------------------------
 
 historyButton :: ComponentClass {state :: RefVal State} {}
@@ -194,10 +161,7 @@ historyButton = createClass spec { displayName = "historyButton", render = rende
 checkButton :: ComponentClass {state :: RefVal State} {}
 checkButton = createClass spec { displayName = "CheckButton", render = renderFun } where
     renderFun this = do
-      State { oldFeed     = (OldFeed of_)
-            , newFeed     = (NewFeed nf)
-            , currentFeed = (CurrentFeed cf)
-            , errors      = es } <- readState this.props.state
+      State { newFeed = (NewFeed nf) } <- readState this.props.state
 
       let count = length nf
 
@@ -441,24 +405,11 @@ tweetMenu = createClass spec { displayName = "TweetMenu", render = renderFun }
 
 
 showContextMenu state x y tid = do
-    trace $ ">>>" ++ show x ++ show y ++ tid
-    State { oldFeed =     of_
-          , currentFeed = cf
-          , newFeed =     nf
-          , historyButtonDisabled = hbd
-          , contextMenu = _
-          , errors =      es } <- readState state
-
-    writeState state $ State { oldFeed:     of_
-                             , currentFeed: cf
-                             , newFeed:     nf
-                             , historyButtonDisabled: hbd
-                             , contextMenu: ContextMenu { visible: true
-                                                        , x: x
-                                                        , y: y
-                                                        , tweetId: Just tid }
-                             , errors:      es }
-    pure unit
+    s <- readState state
+    writeState state (s # contextMenuL .~ ContextMenu { visible: true
+                                                      , x: x
+                                                      , y: y
+                                                      , tweetId: Just tid })
 
 tweetContextMenu state id_str e = do
     stopPropagation e
@@ -502,17 +453,15 @@ tweetComponent = createClass spec { displayName = "Tweet" , render = renderFun }
 tweetsList :: ComponentClass {state :: RefVal State} {}
 tweetsList = createClass spec { displayName = "TweetsList", render = renderFun }
     where
-        renderFun this = do
-          State { oldFeed = (OldFeed of_)
-                , newFeed = (NewFeed nf)
-                , currentFeed = (CurrentFeed cf)
-                , errors      = es } <- readState this.props.state
+    renderFun this = do
+        State { newFeed = (NewFeed nf)
+              , currentFeed = (CurrentFeed cf) } <- readState this.props.state
 
-          setTitle $ case length nf of
+        setTitle $ case length nf of
             1 -> "1 new tweet"
             x -> (show x) ++ " new tweets"
 
-          case cf of
+        case cf of
             [] -> pure $ D.ul { id: "feed"
                               , onClick: (\ev -> feedClickHandler ev)} [D.li { className: "no-tweets" } [D.rawText "EOF"]]
             _  -> pure $ D.ul { id: "feed"

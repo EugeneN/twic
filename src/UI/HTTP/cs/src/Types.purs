@@ -1,6 +1,7 @@
 module Types where
 
 import Data.Maybe
+import Data.Monoid
 import Control.Monad.Eff (Eff(..))
 
 type TweetId = Number
@@ -20,11 +21,20 @@ newtype OldFeed     = OldFeed [Tweet]
 newtype CurrentFeed = CurrentFeed [Tweet]
 newtype NewFeed     = NewFeed [Tweet]
 
+instance semigroupNewFeed :: Semigroup NewFeed where
+    (<>) (NewFeed as) (NewFeed bs) = NewFeed $ as ++ bs
+
+instance semigroupOldFeed :: Semigroup OldFeed where
+    (<>) (OldFeed as) (OldFeed bs) = OldFeed $ as ++ bs
+
+instance semigroupCurrentFeed :: Semigroup CurrentFeed where
+    (<>) (CurrentFeed as) (CurrentFeed bs) = CurrentFeed $ as ++ bs
+
 type Msgid = UUID
 
-data Error = Error   String Msgid
-           | Success String Msgid
-           | Other   String Msgid
+data StatusMessage = Error   String Msgid
+                   | Success String Msgid
+                   | Other   String Msgid
 
 data ContextMenu = ContextMenu { visible :: Boolean
                                , x       :: Number
@@ -35,7 +45,7 @@ data ContextMenu = ContextMenu { visible :: Boolean
 data State = State { oldFeed     :: OldFeed
                    , currentFeed :: CurrentFeed
                    , newFeed     :: NewFeed
-                   , errors      :: [Error]
+                   , errors      :: [StatusMessage]
                    , contextMenu :: ContextMenu
                    , historyButtonDisabled :: Boolean }
 

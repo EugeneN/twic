@@ -17,6 +17,8 @@ import Data.Foreign.Class
 import Data.Either
 import Data.Monoid
 import Data.Maybe
+import Optic.Core
+import Control.Monad.Eff.Ref
 
 import Utils
 import Types
@@ -196,22 +198,10 @@ fromWsMessage s = case (readJSON s :: F [Tweet]) of
 successM m = Success m (runUUID $ getUUID)
 errorM m = Error m (runUUID $ getUUID)
 
+setMessage :: forall eff. RefVal State -> StatusMessage -> Eff (ref :: Ref | eff) Unit
 setMessage state msg = do
-    State { oldFeed     = of_
-          , currentFeed = cf
-          , newFeed     = nf
-          , historyButtonDisabled = hbd
-          , contextMenu = ctxm
-          , errors      = es } <- readState state
-
-    let uuid = runUUID $ getUUID
-
-    writeState state $ State { oldFeed:     of_
-                             , currentFeed: cf
-                             , newFeed:     nf
-                             , historyButtonDisabled: hbd
-                             , contextMenu: ctxm
-                             , errors:      es ++ [msg] }
+    s <- readState state
+    writeState state (s # messagesL .~ ((s ^. messagesL) ++ [msg]))
 
 initialState :: State
 initialState = State { oldFeed: OldFeed []
@@ -223,6 +213,38 @@ initialState = State { oldFeed: OldFeed []
                                                 , y: 0
                                                 , tweetId: Nothing }
                      , errors: [] }
+
+contextMenuL :: LensP State ContextMenu
+contextMenuL = lens (\(State s) -> s.contextMenu)
+                    (\(State s) cm -> State (s { contextMenu = cm }))
+
+messagesL :: LensP State [StatusMessage]
+messagesL = lens (\(State s) -> s.errors)
+                 (\(State s) msgs -> State (s {errors = msgs}))
+
+hbdL :: LensP State Boolean
+hbdL = lens (\(State s) -> s.historyButtonDisabled)
+            (\(State s) val -> State (s { historyButtonDisabled = val }))
+
+newFeedL :: LensP State NewFeed
+newFeedL = lens (\(State s) -> s.newFeed)
+                (\(State s) ts -> State (s { newFeed = ts }))
+                
+oldFeedL :: LensP State OldFeed
+oldFeedL = lens (\(State s) -> s.oldFeed)
+                (\(State s) ts -> State (s { oldFeed = ts }))                
+                
+currentFeedL :: LensP State CurrentFeed
+currentFeedL = lens (\(State s) -> s.currentFeed)
+                (\(State s) ts -> State (s { currentFeed = ts }))                
+
+-- TODO remove `e` param
+resetContextMenu state e = do
+     s <- readState state
+     writeState state (s # contextMenuL .~ ContextMenu { visible: false
+                                                       , x: 0
+                                                       , y: 0
+                                                       , tweetId: Nothing })
 
 -- TODO get rid of singleton global state
 stateObservable = getNewObservable initialState
