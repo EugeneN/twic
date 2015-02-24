@@ -19,27 +19,36 @@ hideMessage state msgid = do
           , currentFeed = cf
           , newFeed     = nf
           , historyButtonDisabled = hbd
+          , contextMenu = ctxm
           , errors      = es } <- readState state
 
     writeState state $ State { oldFeed:     of_
                              , currentFeed: cf
                              , newFeed:     nf
                              , historyButtonDisabled: hbd
-                             , errors:      filter (\(Error _ msgid') -> msgid' /= msgid) es }
+                             , contextMenu: ctxm
+                             , errors:      filter filterOutMsg es }
     pure unit
 
-errorItem state (Error msg msgid) =
+    where
+    filterOutMsg (Error _ msgid')   = msgid' /= msgid
+    filterOutMsg (Success _ msgid') = msgid' /= msgid
+    filterOutMsg (Other _ msgid')   = msgid' /= msgid
+
+messageItemBody state msg msgid =
   D.div {className: "message"} [
       D.span {} [D.rawText msg]
     , D.button { className: "remove-message"
                , onClick: hideMessage state msgid } [D.rawText "x"]]
+               
+messageItem state (Error msg msgid)   = messageItemBody state msg msgid
+messageItem state (Success msg msgid) = messageItemBody state msg msgid
+messageItem state (Other msg msgid)   = messageItemBody state msg msgid
 
+-- TODO rename errorsList to messagesList
 errorsList :: ComponentClass { state :: RefVal State } {}
 errorsList = createClass spec { displayName = "Messages", render = renderFun } where
     renderFun this = do
-        State { oldFeed     = _
-              , newFeed     = _
-              , currentFeed = _
-              , errors      = es } <- readState this.props.state
+        State { errors = es } <- readState this.props.state
 
-        pure $ D.div {className: "messages"} $ (errorItem this.props.state) <$> es
+        pure $ D.div {className: "messages"} $ (messageItem this.props.state) <$> es

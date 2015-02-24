@@ -333,3 +333,15 @@ foreign import getUUID
       return s.join('');
     };
     """ :: forall eff. Eff (uuid :: UUIDEff | eff) UUID
+
+foreign import callEventHandler
+    """
+    function callEventHandler(f){
+        return function(e){ return f(e)() }
+    }
+    """ :: forall f e eff. f -> e -> Eff ( | eff) Unit
+
+foreign import stopPropagation
+    """
+    function stopPropagation(e) { return function() {e.stopPropagation()} }
+    """ :: forall a b. a -> Eff ( | b) Unit

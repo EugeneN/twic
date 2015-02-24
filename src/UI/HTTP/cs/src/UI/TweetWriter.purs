@@ -48,7 +48,7 @@ handleSubmitTweet text = do
     where
     tweetResultHandler resp = do
         trace $ "tweeted " ++ show (resp :: AjaxResult)
-        --renderMessage messagesId $ [Success "Tweeted :-)"]
+        --setMessage state (successM "Tweeted :-)")
         showWriteButton writeTweetContainerId
         pure unit
 

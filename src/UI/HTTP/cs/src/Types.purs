@@ -26,11 +26,17 @@ data Error = Error   String Msgid
            | Success String Msgid
            | Other   String Msgid
 
+data ContextMenu = ContextMenu { visible :: Boolean
+                               , x       :: Number
+                               , y       :: Number
+                               , tweetId :: Maybe TweetIdS
+                               }
 
 data State = State { oldFeed     :: OldFeed
                    , currentFeed :: CurrentFeed
                    , newFeed     :: NewFeed
                    , errors      :: [Error]
+                   , contextMenu :: ContextMenu
                    , historyButtonDisabled :: Boolean }
 
 

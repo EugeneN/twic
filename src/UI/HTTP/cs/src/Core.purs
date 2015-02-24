@@ -193,13 +193,35 @@ fromWsMessage s = case (readJSON s :: F [Tweet]) of
     Right ts -> ts
 
 --------------------------------------------------------------------------------
+successM m = Success m (runUUID $ getUUID)
+errorM m = Error m (runUUID $ getUUID)
 
+setMessage state msg = do
+    State { oldFeed     = of_
+          , currentFeed = cf
+          , newFeed     = nf
+          , historyButtonDisabled = hbd
+          , contextMenu = ctxm
+          , errors      = es } <- readState state
+
+    let uuid = runUUID $ getUUID
+
+    writeState state $ State { oldFeed:     of_
+                             , currentFeed: cf
+                             , newFeed:     nf
+                             , historyButtonDisabled: hbd
+                             , contextMenu: ctxm
+                             , errors:      es ++ [msg] }
 
 initialState :: State
 initialState = State { oldFeed: OldFeed []
                      , currentFeed: CurrentFeed []
                      , newFeed: NewFeed []
                      , historyButtonDisabled: false
+                     , contextMenu: ContextMenu { visible: false
+                                                , x: 0
+                                                , y: 0
+                                                , tweetId: Nothing }
                      , errors: [] }
 
 -- TODO get rid of singleton global state
