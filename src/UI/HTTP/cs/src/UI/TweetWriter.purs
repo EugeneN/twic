@@ -3,6 +3,7 @@ module UI.TweetWriter where
 import Debug.Trace
 import Data.Maybe
 import Control.Monad.Eff (Eff(..))
+import Control.Monad.Eff.Ref
 import DOM (DOM(..))
 import qualified React.DOM as D
 import React (createClass, renderComponentById, spec, eventHandler)
@@ -15,48 +16,58 @@ import qualified Control.Monad.JQuery as J
 import Config (writeTweetContainerId, messagesId)
 import Utils
 import Types
-import UI.LoaderIndicator (showLoader)
+import Core
+import Optic.Core ( (.~), (^.))
 
 
-handleShowWriteInput :: forall eff. Eff (dom :: DOM, react :: React, trace :: Trace | eff) Unit
-handleShowWriteInput = do
-    trace "handleShowWriteInput here"
-    showWriteInput writeTweetContainerId
-    setFocus "write-input-id"
-    pure unit
+showWriteInput :: forall eff. RefVal State
+                           -> Eff (ref :: Ref, dom :: DOM, react :: React, trace :: Trace | eff) Unit
+showWriteInput state = do
+    s <- readState state
+    writeState state (s # writeInputL .~ WriteInput { visible: true, disabled: false })
 
-handleShowWriteButton :: forall eff. Eff (dom :: DOM, react :: React, trace :: Trace | eff) Unit
-handleShowWriteButton = do
-    trace "handleShowWriteButton here"
-    showWriteButton writeTweetContainerId
-    pure unit
+    forkPostpone (setFocus "write-input-id") 50
 
-handleSubmitTweet :: forall eff. String -> Eff (react :: React, dom :: DOM, trace :: Trace | eff) Unit
-handleSubmitTweet "" = do
+hideWriteInput :: forall eff. RefVal State
+                           -> Eff (ref :: Ref, dom :: DOM, react :: React, trace :: Trace | eff) Unit
+hideWriteInput state = do
+    s <- readState state
+    writeState state (s # writeInputL .~ WriteInput { visible: false, disabled: false })
+
+disableWriteInput state = do
+    s <- readState state
+    writeState state (s # writeInputL .~ WriteInput { visible: true -- TODO use prev value
+                                                    , disabled: true })
+        
+handleSubmitTweet :: forall eff. RefVal State
+                              -> String
+                              -> Eff (ref :: Ref, react :: React, dom :: DOM, trace :: Trace | eff) Unit
+handleSubmitTweet state "" = do
     trace $ "won't submit an empty tweet"
+    setMessage state (errorM "Won't submit an empty tweet")
     pure unit
 
-handleSubmitTweet text = do
+handleSubmitTweet state text = do
+    disableWriteInput state -- TODO just diable here, hide in response handler
     trace $ "gonna tweet this: " ++ text
     let url = "/tweet?status=" ++ text
 
-    showLoader writeTweetContainerId
-
-    (rioPost url Nothing) ~> tweetResultHandler
+    (rioPost url Nothing) ~> tweetResultHandler state
     pure unit
 
     where
-    tweetResultHandler resp = do
+    tweetResultHandler state resp = do
+        hideWriteInput state
         trace $ "tweeted " ++ show (resp :: AjaxResult)
-        --setMessage state (successM "Tweeted :-)")
-        showWriteButton writeTweetContainerId
+        -- TODO check error response
+        setMessage state (successM "Tweeted :-)")
         pure unit
 
 
 handleWriteKeyPress this k = do
     case keyEventToKeyCode k of
-        Escape -> handleShowWriteButton
-        Enter  -> handleSubmitTweet $ value k.target
+        Escape -> hideWriteInput this.props.state
+        Enter  -> handleSubmitTweet this.props.state $ value k.target
         _      -> pure unit
 
     pure unit
@@ -66,30 +77,27 @@ listenWriteKeys state = do
 
     let keyCodesS = keyEventToKeyCode <$> bodyKeys
 
-    (filterRx ((==) F2) keyCodesS)     ~> \_ -> handleShowWriteInput
-    (filterRx ((==) Escape) keyCodesS) ~> \_ -> handleShowWriteButton
+    (filterRx ((==) F2) keyCodesS)     ~> \_ -> showWriteInput state
+    (filterRx ((==) Escape) keyCodesS) ~> \_ -> hideWriteInput state
 
 
-writeInputComponent :: ComponentClass {} {}
+writeInputComponent :: ComponentClass { state :: RefVal State } {}
 writeInputComponent = createClass spec { displayName = "writeInputComponent", render = renderFun }
     where
-        renderFun this = pure $
-            D.div {className: "write-tweet"} [
-                    D.input { "type": "text"
-                            , "id": "write-input-id"
-                            , onKeyUp: eventHandler this handleWriteKeyPress } [] ]
+      renderFun this = do
+        State { writeInput = (WriteInput { visible = visible
+                                         , disabled = disabled }) } <- readState this.props.state
 
-writeButtonComponent :: ComponentClass {} {}
-writeButtonComponent = createClass spec { displayName = "writeButtonComponent", render = renderFun }
-    where
-        renderFun this = pure $
-            D.button { className: "show-write-tweet"
-                     , "id": "write-tweet-id"
-                     , onClick: handleShowWriteInput
-                     , dangerouslySetInnerHTML: {__html: "&middot;&middot;&middot;"}} []
+        pure $
+            D.div { className: "write-tweet"
+                  , disabled: disabled
+                  , style: { display: if visible then "block" else "none" }} [
+                      D.input { "type": "text"
+                              , "id": "write-input-id"
+                              , onKeyUp: eventHandler this handleWriteKeyPress  } []
 
-showWriteInput :: forall eff. String -> Eff (dom :: DOM, react :: React | eff) Component
-showWriteInput targetId = renderComponentById (writeInputComponent {} []) targetId
+                    , D.button { className: "writer-button ok"
+                               , onClick: (handleSubmitTweet this.props.state "") } [D.rawText "✓"]
 
-showWriteButton :: forall eff. String -> Eff (dom :: DOM, react :: React | eff) Component
-showWriteButton targetId = renderComponentById (writeButtonComponent {} []) targetId
+                    , D.button { className: "writer-button nok"
+                               , onClick: hideWriteInput this.props.state } [D.rawText "⨯"]]

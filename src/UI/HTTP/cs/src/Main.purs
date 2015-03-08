@@ -8,7 +8,6 @@ import Types
 import Utils
 import Core
 import UI.Feed (startWsClient, listenFeedKeys, showNewTweets, listenHistoryEvents)
-import UI.LoaderIndicator (showLoader, hideLoader)
 import UI.TweetWriter (listenWriteKeys)
 import UI.RootLayout (renderRootLayout)
 
@@ -33,7 +32,7 @@ main = do
 
     where
     listenState state rl = stateObservable ~> (\_ -> do
-        trace "Got state update"
+        trace $ "Got state update" ++ toString state
         --renderRootLayout "root" state
         setProps rl state
         pure unit)

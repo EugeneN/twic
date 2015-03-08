@@ -24,7 +24,6 @@ import Core
 import Utils
 import Types
 import UI.Types
-import UI.LoaderIndicator (hideLoader, showLoader)
 import Optic.Core ( (.~), (^.))
 
 showNewTweets :: forall eff. RefVal State
@@ -35,6 +34,7 @@ showNewTweets state = do
           , newFeed     = (NewFeed nf)
           , historyButtonDisabled = hbd
           , contextMenu = ctxm
+          , writeInput  = wi
           , errors      = es } <- readState state
 
     writeState state $ State { oldFeed:     OldFeed $ of_ ++ cf
@@ -42,6 +42,7 @@ showNewTweets state = do
                              , newFeed:     NewFeed []
                              , historyButtonDisabled: hbd
                              , contextMenu: ctxm
+                             , writeInput:  wi
                              , errors:      es}
 
     scrollToTop
@@ -56,6 +57,7 @@ showOldTweets state count = do
           , newFeed     = (NewFeed nf)
           , historyButtonDisabled = hbd
           , contextMenu = ctxm
+          , writeInput  = wi
           , errors      = es} <- readState state
 
     let l = length of_
@@ -69,6 +71,7 @@ showOldTweets state count = do
                                      , newFeed:     (NewFeed nf)
                                      , historyButtonDisabled: hbd
                                      , contextMenu: ctxm
+                                     , writeInput:  wi
                                      , errors:      es }
 
             let maxid = case head newOf of
@@ -445,7 +448,7 @@ tweetComponent = createClass spec { displayName = "Tweet" , render = renderFun }
                     authorToHtml this.props.state this.props.author this.props.retweeted_by
                   , D.span { className: "tweet-body"
                            , "data-tweet-id": this.props.id_str
-                           , onClickCapture: (callEventHandler $ tweetContextMenu this.props.state this.props.id_str)
+                           , onContextMenu: (callEventHandler $ tweetContextMenu this.props.state this.props.id_str)
                            } ((asHtml this.props.state) <<< (processTweetElement this.props.entities) <$> this.props.text)
                   , asHtml this.props.state this.props.entities ]
 

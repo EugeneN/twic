@@ -42,11 +42,15 @@ data ContextMenu = ContextMenu { visible :: Boolean
                                , tweetId :: Maybe TweetIdS
                                }
 
+data WriteInput = WriteInput { visible  :: Boolean
+                             , disabled :: Boolean }
+
 data State = State { oldFeed     :: OldFeed
                    , currentFeed :: CurrentFeed
                    , newFeed     :: NewFeed
                    , errors      :: [StatusMessage]
                    , contextMenu :: ContextMenu
+                   , writeInput  :: WriteInput
                    , historyButtonDisabled :: Boolean }
 
 

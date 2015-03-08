@@ -10,11 +10,16 @@ import React.Types ( Component() , ComponentClass() , Event() , React()
 
 import UI.Feed (tweetsList, checkButton, historyButton, tweetMenu)
 import UI.Messages (errorsList)
+import UI.TweetWriter (writeInputComponent, showWriteInput)
 import Types
 import Core
 import Utils
 import Data.Maybe
 
+contextMenuHandler state ev = do
+    stopPropagation ev
+    resetContextMenu state
+    showWriteInput state
 
 rootLayout :: ComponentClass { state :: RefVal State } {}
 rootLayout =
@@ -28,7 +33,8 @@ rootLayout =
 
       pure $
         D.div { className: "root-layout"
-              , onClick: (callEventHandler $ resetContextMenu this.props.state) } [
+              , onContextMenu: (callEventHandler $ contextMenuHandler this.props.state)
+              , onClick: (resetContextMenu this.props.state) } [
             D.div { className:  "error" , id: "messages" } [
               (errorsList {state: this.props.state} [])]
 
@@ -41,7 +47,8 @@ rootLayout =
           , D.div { className:  "refresh" , id: "refresh" } [
               (checkButton {state: this.props.state} []) ]
 
-          , D.div { id: "write-tweet-container-id" } []
+          , D.div { id: "write-tweet-container-id" } [
+              (writeInputComponent {state: this.props.state} [])]
           , D.div { id: "ctx-menu-container-id" } [
               (tweetMenu {state: this.props.state} [])]
         ]

@@ -24,8 +24,6 @@ import Utils
 import Types
 import Config
 
-import UI.LoaderIndicator (showLoader, hideLoader)
-
 
 toTweetToken :: String -> String -> TweetElement
 toTweetToken "AtUsername"   = AtUsername
@@ -208,6 +206,7 @@ initialState = State { oldFeed: OldFeed []
                      , currentFeed: CurrentFeed []
                      , newFeed: NewFeed []
                      , historyButtonDisabled: false
+                     , writeInput: WriteInput { visible: false, disabled: false }
                      , contextMenu: ContextMenu { visible: false
                                                 , x: 0
                                                 , y: 0
@@ -217,6 +216,10 @@ initialState = State { oldFeed: OldFeed []
 contextMenuL :: LensP State ContextMenu
 contextMenuL = lens (\(State s) -> s.contextMenu)
                     (\(State s) cm -> State (s { contextMenu = cm }))
+                    
+writeInputL :: LensP State WriteInput
+writeInputL = lens (\(State s) -> s.writeInput)
+                   (\(State s) wi -> State (s { writeInput = wi }))
 
 messagesL :: LensP State [StatusMessage]
 messagesL = lens (\(State s) -> s.errors)
@@ -238,8 +241,7 @@ currentFeedL :: LensP State CurrentFeed
 currentFeedL = lens (\(State s) -> s.currentFeed)
                 (\(State s) ts -> State (s { currentFeed = ts }))                
 
--- TODO remove `e` param
-resetContextMenu state e = do
+resetContextMenu state = do
      s <- readState state
      writeState state (s # contextMenuL .~ ContextMenu { visible: false
                                                        , x: 0

@@ -26,7 +26,7 @@ Twic is a simple reader of a Twitter user's home feed. It's main goal is a searc
 
 - gentle animations here and there to exploit user's muscle memory and continuity feeling;
 
-- can be operated using only a mouse, or only a keyboard, or both - either way with minimal amount of actions required.  
+- can be operated using only a mouse, or only a keyboard, or both - either way with minimal amount of actions required.
 
 All the checks and feed tracking are done automatically and are invisible for the user. Thus user has a very simple workflow - if the single button in the UI is orange, then he/she may click on it and get new tweets. The button becomes grey until next tweets will be available.
 
@@ -34,7 +34,7 @@ Compare with the original Twitter UI:
 
 <img src="res/compare.png" style="width: 600px;"/>
 
-Twic has also a more advanced features - posting new tweets, retweeting, starring tweets, replying, old feed view up to the beginning. Filtered feed views and conversation views are planned.  
+Twic has also a more advanced features - posting new tweets, retweeting, starring tweets, replying, old feed view up to the beginning. Filtered feed views and conversation views are planned.
 
 # Run
 

@@ -261,6 +261,7 @@ bodyCss = do
     background transparent
     color white
     position absolute
+    fontSize (px 28)
     zIndex 100
     padding (px 0) (px 0) (px 0) (px 0)
     margin (px 0) (px 0) (px 0) (px 0)
@@ -270,7 +271,7 @@ bodyCss = do
         display inline
         margin (px 0) (px 0) (px 0) (px 0)
         cursor pointer
-        background $ rgba 40 40 40 90
+        background $ rgba 40 40 40 222
 
     li # hover ? do
         background red
@@ -329,10 +330,13 @@ bodyCss = do
 
   ".write-tweet" ? do
     position fixed
-    top (px 66)
+    top (pct 50)
+    transform $ translateY (px (-70))
     width (pct 100)
-    height (px 80)
-    background $ rgba 40 40 40 95
+    height (px 50)
+    background $ rgba 40 40 40 222
+    paddingTop (px 48)
+    paddingBottom (px 48)
 
     input # focus ? do
       borderTop solid (px 1) transparent
@@ -343,9 +347,35 @@ bodyCss = do
     input ? do
       width (px 567)
       fontSize (px 25)
-      marginTop (px 15)
+--       marginTop (px 15)
       padding (px 7) (px 11) (px 7) (px 11)
 
+  ".writer-button" ? do
+    textAlign (alignSide sideCenter)
+    fontWeight bold
+    padding (px 10)  (px 10)  (px 10)  (px 10)
+    fontSize (px 15)
+    marginLeft (px 20)
+    --borderRadius (pct 50) (pct 50) (pct 50) (pct 50)
+    background ("#555555" :: Color)
+    borderTop solid (px 0) red
+    borderBottom solid (px 0) red
+    borderLeft solid (px 0) red
+    borderRight solid (px 0) red
+    width (px 42)
+    height (px 42)
+    position relative
+    top (px (-2))
+    color white
+    cursor pointer
+    --boxShadow 0 0 (px 4) (setA 50 baseColor)
+    transition "all" (ms 150) ease (ms 150)
+
+  ".ok" # hover ?
+    background green
+
+  ".nok" # hover ?
+    background red
 
   ".red" ? do
     color red

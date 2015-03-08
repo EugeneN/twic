@@ -343,5 +343,5 @@ foreign import callEventHandler
 
 foreign import stopPropagation
     """
-    function stopPropagation(e) { return function() {e.stopPropagation()} }
+    function stopPropagation(e) { return function() {e.stopPropagation(); e.preventDefault(); } }
     """ :: forall a b. a -> Eff ( | b) Unit
