@@ -61,13 +61,12 @@ handleSubmitTweet state _ "" = do
 
 handleSubmitTweet state reply text = do
     disableWriteInput state
+    disableHistoryButton state
     trace $ "gonna tweet this: " ++ text
 
     let url = case reply of
                 Nothing -> "/tweet?status=" ++ text
                 Just (Tweet {id_str = reply_id}) -> "/reply?status=" ++ text ++ "&reply_to=" ++ reply_id
-
-    disableHistoryButton state
 
     (rioPost url Nothing) ~> tweetResultHandler state
     pure unit
@@ -86,13 +85,11 @@ handleSubmitTweet state reply text = do
         pure unit
 
 
-handleWriteKeyPress reply this k = do
+handleWriteKeyPress reply this k =
     case keyEventToKeyCode k of
         Escape -> hideWriteInput this.props.state
         Enter  -> handleSubmitTweet this.props.state reply (value k.target)
         _      -> pure unit
-
-    pure unit
 
 listenWriteKeys state = do
     bodyKeys <- J.select "body" >>= onAsObservable "keyup"
@@ -107,6 +104,7 @@ writeInputComponent :: ComponentClass { state :: RefVal State } {}
 writeInputComponent = createClass spec { displayName = "writeInputComponent", render = renderFun }
     where
       getAuthor (Tweet { user = Author {name = username} }) = username
+      getAuthorSN (Tweet { user = Author {screen_name = sn} }) = sn
       renderFun this = do
         State { writeInput = (WriteInput { visible = visible
                                          , disabled = disabled
@@ -120,6 +118,9 @@ writeInputComponent = createClass spec { displayName = "writeInputComponent", re
                            , height: case reply of
                                         Nothing -> "50px"
                                         Just _  -> "100px"
+                           , transform: case reply of
+                                            Nothing -> "translateY(-70px)"
+                                            Just _  -> "translateY(-140px)"
                            }} [
                       case reply of
                         Nothing    -> D.div {} []
@@ -132,6 +133,9 @@ writeInputComponent = createClass spec { displayName = "writeInputComponent", re
 
                     , D.input { "type": "text"
                               , "id": "write-input-id"
+                              , "value": case reply of
+                                            Nothing -> ""
+                                            Just tweet -> "@" ++ getAuthorSN tweet ++ " "
                               , onKeyUp: eventHandler this (handleWriteKeyPress reply)  } []
 
                     , D.button { className: "writer-button ok"

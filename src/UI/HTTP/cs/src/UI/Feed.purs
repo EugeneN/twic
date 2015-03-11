@@ -30,24 +30,13 @@ import Optic.Core ( (.~), (^.))
 showNewTweets :: forall eff. RefVal State
                           -> Eff (ref :: Ref, dom :: DOM, react :: React | eff) Unit
 showNewTweets state = do
-    State { feed = AFeed { oldFeed     = (OldFeed of_)
-                         , currentFeed = (CurrentFeed cf)
-                         , newFeed     = (NewFeed nf) }
-          , extraFeed = ef
-          , historyButtonDisabled = hbd
-          , contextMenu = ctxm
-          , writeInput  = wi
-          , errors      = es } <- readState state
+    s@State { feed = AFeed { oldFeed     = (OldFeed of_)
+                           , currentFeed = (CurrentFeed cf)
+                           , newFeed     = (NewFeed nf) } } <- readState state
 
-    writeState state $ State { feed: AFeed {oldFeed:      OldFeed $ of_ ++ cf
-                                           , currentFeed: CurrentFeed nf
-                                           , newFeed:     NewFeed [] }
-                             , extraFeed: ef
-                             , historyButtonDisabled: hbd
-                             , contextMenu: ctxm
-                             , writeInput:  wi
-                             , errors:      es}
-
+    writeState state (s # feedL .~ AFeed { oldFeed:     OldFeed $ of_ ++ cf
+                                         , currentFeed: CurrentFeed nf
+                                         , newFeed:     NewFeed [] })
     scrollToTop
     pure unit
 
