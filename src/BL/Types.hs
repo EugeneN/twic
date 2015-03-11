@@ -17,6 +17,7 @@ import           GHC.Generics
 
 type Url = String
 type Username = String
+type ScreenName = Text
 type TweetId = Int64
 type TweetBody = ByteString
 

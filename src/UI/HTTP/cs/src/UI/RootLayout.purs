@@ -11,6 +11,7 @@ import React.Types ( Component() , ComponentClass() , Event() , React()
 import UI.Feed (tweetsList, checkButton, historyButton, tweetMenu)
 import UI.Messages (errorsList)
 import UI.TweetWriter (writeInputComponent, showWriteInput)
+import UI.FeedMetadata (feedMetadata)
 import Types
 import Core
 import Utils
@@ -26,9 +27,9 @@ rootLayout =
     createClass spec { displayName = "RootLayout", render = renderFun }
     where
     renderFun this = do
-      State { oldFeed     = (OldFeed of_)
-            , newFeed     = (NewFeed nf)
-            , currentFeed = (CurrentFeed cf)
+      State { feed = AFeed {oldFeed     = (OldFeed of_)
+                           , newFeed     = (NewFeed nf)
+                           , currentFeed = (CurrentFeed cf) }
             , errors      = es } <- readState this.props.state
 
       pure $
@@ -37,6 +38,9 @@ rootLayout =
               , onClick: (resetContextMenu this.props.state) } [
             D.div { className:  "error" , id: "messages" } [
               (errorsList {state: this.props.state} [])]
+
+          , D.div { id: "feed-metadata-container-id" } [
+              (feedMetadata {state: this.props.state} [])]
 
           , D.div { id: "load-history-container-id" } [
               (historyButton {state: this.props.state} [])]
@@ -49,6 +53,7 @@ rootLayout =
 
           , D.div { id: "write-tweet-container-id" } [
               (writeInputComponent {state: this.props.state} [])]
+
           , D.div { id: "ctx-menu-container-id" } [
               (tweetMenu {state: this.props.state} [])]
         ]

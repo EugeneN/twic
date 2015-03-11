@@ -22,9 +22,11 @@ module BL.Core (
   , saveLastSeenAsync
   , updateFeed
   , updateFeedSync
+  , readUserstream
   , retweetUrl
   , getRunTime
   , tweetUrl
+  , replyUrl
   , readHistory
   , getStatus
   , writeApi
@@ -284,6 +286,10 @@ starUrl x = "https://api.twitter.com/1.1/favorites/create.json?id=" ++ show x
 tweetUrl :: TweetBody -> Url
 tweetUrl status = "https://api.twitter.com/1.1/statuses/update.json?status=" ++ B8.unpack status
 
+replyUrl :: TweetBody -> B8.ByteString -> Url
+replyUrl status reply_to_id = "https://api.twitter.com/1.1/statuses/update.json?status=" ++ B8.unpack status
+                                    ++ "&in_reply_to_status_id=" ++ B8.unpack reply_to_id
+
 userTimeline :: Username -> Int -> Feed
 userTimeline name 0 = UserTimeline $
   "https://api.twitter.com/1.1/statuses/user_timeline.json?screen_name=" ++ name
@@ -359,6 +365,13 @@ handleIncomingTweets _ fv ts = do
     case maybeOldTs of
         Just oldts -> putMVar fv $ oldts ++ ts
         Nothing    -> putMVar fv ts
+
+readUserstream :: ScreenName -> Int -> IO (Either (ApiError HttpException) [Tweet])
+readUserstream sn count = do
+    info $ "reading userstream where ScreenName=" ++ show sn ++ " and count=" ++ show count
+    (_, res) <- readApi $ userTimeline (unpack sn) count
+    return res
+
 
 readHistory :: TweetId -> Int -> IO (Either (ApiError HttpException) [Tweet])
 readHistory maxid count = do

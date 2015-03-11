@@ -202,11 +202,14 @@ setMessage state msg = do
     writeState state (s # messagesL .~ ((s ^. messagesL) ++ [msg]))
 
 initialState :: State
-initialState = State { oldFeed: OldFeed []
-                     , currentFeed: CurrentFeed []
-                     , newFeed: NewFeed []
+initialState = State { feed: AFeed { oldFeed: OldFeed []
+                                   , currentFeed: CurrentFeed []
+                                   , newFeed: NewFeed [] }
+                     , extraFeed: Nothing
                      , historyButtonDisabled: false
-                     , writeInput: WriteInput { visible: false, disabled: false }
+                     , writeInput: WriteInput { visible: false
+                                              , disabled: false
+                                              , replyTo: Nothing }
                      , contextMenu: ContextMenu { visible: false
                                                 , x: 0
                                                 , y: 0
@@ -216,7 +219,7 @@ initialState = State { oldFeed: OldFeed []
 contextMenuL :: LensP State ContextMenu
 contextMenuL = lens (\(State s) -> s.contextMenu)
                     (\(State s) cm -> State (s { contextMenu = cm }))
-                    
+
 writeInputL :: LensP State WriteInput
 writeInputL = lens (\(State s) -> s.writeInput)
                    (\(State s) wi -> State (s { writeInput = wi }))
@@ -229,17 +232,25 @@ hbdL :: LensP State Boolean
 hbdL = lens (\(State s) -> s.historyButtonDisabled)
             (\(State s) val -> State (s { historyButtonDisabled = val }))
 
-newFeedL :: LensP State NewFeed
-newFeedL = lens (\(State s) -> s.newFeed)
-                (\(State s) ts -> State (s { newFeed = ts }))
-                
-oldFeedL :: LensP State OldFeed
-oldFeedL = lens (\(State s) -> s.oldFeed)
-                (\(State s) ts -> State (s { oldFeed = ts }))                
-                
-currentFeedL :: LensP State CurrentFeed
-currentFeedL = lens (\(State s) -> s.currentFeed)
-                (\(State s) ts -> State (s { currentFeed = ts }))                
+feedL :: LensP State AFeed
+feedL = lens (\(State s) -> s.feed)
+             (\(State s) f -> State (s {feed = f}))
+
+extraFeedL :: LensP State (Maybe BFeed)
+extraFeedL = lens (\(State s) -> s.extraFeed)
+                  (\(State s) ef -> State (s {extraFeed = ef}))
+
+newFeedL :: LensP AFeed NewFeed
+newFeedL = lens (\(AFeed s) -> s.newFeed)
+                (\(AFeed s) ts -> AFeed (s { newFeed = ts }))
+
+oldFeedL :: LensP AFeed OldFeed
+oldFeedL = lens (\(AFeed s) -> s.oldFeed)
+                (\(AFeed s) ts -> AFeed (s { oldFeed = ts }))
+
+currentFeedL :: LensP AFeed CurrentFeed
+currentFeedL = lens (\(AFeed s) -> s.currentFeed)
+                    (\(AFeed s) ts -> AFeed (s { currentFeed = ts }))
 
 resetContextMenu state = do
      s <- readState state
@@ -269,7 +280,12 @@ foreign import setTitle
     """ :: forall eff. String -> Eff (dom :: DOM | eff) Unit
 
 
+enableHistoryButton = toggleHistoryButton false
+disableHistoryButton = toggleHistoryButton true
 
+toggleHistoryButton x state = do
+    s <- readState state
+    writeState state (s # hbdL .~ x)
 
 
 

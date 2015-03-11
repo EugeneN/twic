@@ -4,12 +4,12 @@ module UI.HTTP.App where
 
 import           BL.Core                             (getStatus, retweetUrl,
                                                       saveLastSeen, readHistory,
-                                                      saveLastSeenAsync,
-                                                      starUrl, tweetUrl,
+                                                      saveLastSeenAsync, replyUrl,
+                                                      starUrl, tweetUrl, readUserstream,
                                                       updateFeed, writeApi)
 import           BL.DataLayer                        (MyDb)
 import           BL.Types                            (FeedState, Message (..),
-                                                      Tweet, TweetBody, TweetId,
+                                                      Tweet, TweetBody, TweetId, ScreenName,
                                                       UpdateMessage)
 import           Blaze.ByteString.Builder            (Builder, fromByteString)
 import           Config                              (heartbeatDelay)
@@ -30,6 +30,7 @@ import qualified Data.ByteString.Lazy                as BSL
 import           Data.Int                            (Int64)
 import           Data.Text                           (Text)
 import qualified Data.Text                           as T
+import           Data.Text.Encoding                  (decodeUtf8)
 import           Data.Tuple
 import           Data.UUID                           (UUID)
 import           Data.UUID.V4                        (nextRandom)
@@ -92,8 +93,10 @@ httpapp st db request sendResponse = do
         "retweet"       -> retweetHandler request sendResponse
         "star"          -> starHandler request sendResponse
         "tweet"         -> tweetHandler request sendResponse
+        "reply"         -> replyHandler request sendResponse
         "stat"          -> statHandler st db request sendResponse
         "history"       -> historyHandler request sendResponse
+        "userfeed"      -> userfeedHandler request sendResponse
         _               -> notFoundHandler request sendResponse
 
 makeClient :: UUID -> WS.Connection -> Client
@@ -244,6 +247,17 @@ historyHandler request response = case queryString request of
         historyStream id_ send flush =
             readHistory id_ 20 >>= send . justTweetsToJson >> flush
 
+userfeedHandler :: Application
+userfeedHandler request response = case queryString request of
+    [("sn", Just screenName)] ->
+        response $ responseStream status200 [mimeJSON] (userfeedStream (decodeUtf8 screenName))
+
+    _ -> response $ responseLBS status200 [mimeJSON] "bad request"
+
+    where
+        userfeedStream :: ScreenName -> (Builder -> IO ()) -> IO () -> IO ()
+        userfeedStream sn send flush =
+            readUserstream sn 200 >>= send . justTweetsToJson >> flush
 
 tweetHandler :: Application
 tweetHandler request response = case queryString request of
@@ -258,6 +272,20 @@ tweetHandler request response = case queryString request of
         tweetStream :: TweetBody -> (Builder -> IO ()) -> IO () -> IO ()
         tweetStream status send flush =
             writeApi (tweetUrl status) >>= send . tweetToJson >> flush
+
+replyHandler :: Application
+replyHandler request response = case queryString request of
+    [("status", Just status), ("reply_to", Just reply_to_id)] -> do
+        debug "got reply"
+        debug $ show status ++ " -> " ++ show reply_to_id
+        response $ responseStream status200 [mimeJSON] (replyStream status reply_to_id)
+
+    _ -> response $ responseLBS status200 [mimeJSON] "bad request"
+
+    where
+        replyStream :: TweetBody -> B8.ByteString -> (Builder -> IO ()) -> IO () -> IO ()
+        replyStream status reply_to_id send flush =
+            writeApi (replyUrl status reply_to_id) >>= send . tweetToJson >> flush
 
 statHandler :: UTCTime -> MyDb -> Application
 statHandler st db request response = response $ responseStream status200 [mimeText] (respStream st db)

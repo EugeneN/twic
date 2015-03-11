@@ -43,11 +43,20 @@ data ContextMenu = ContextMenu { visible :: Boolean
                                }
 
 data WriteInput = WriteInput { visible  :: Boolean
-                             , disabled :: Boolean }
+                             , disabled :: Boolean
+                             , replyTo  :: Maybe Tweet }
 
-data State = State { oldFeed     :: OldFeed
+data AFeed = AFeed { oldFeed     :: OldFeed
+                   , currentFeed :: CurrentFeed
+                   , newFeed     :: NewFeed }
+
+data BFeed = BFeed { oldFeed     :: OldFeed
                    , currentFeed :: CurrentFeed
                    , newFeed     :: NewFeed
+                   , author      :: Author }
+
+data State = State { feed        :: AFeed
+                   , extraFeed   :: Maybe BFeed
                    , errors      :: [StatusMessage]
                    , contextMenu :: ContextMenu
                    , writeInput  :: WriteInput
