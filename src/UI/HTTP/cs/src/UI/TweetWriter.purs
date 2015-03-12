@@ -71,41 +71,44 @@ disableWriteInput state = do
 
 handleSubmitTweet :: forall eff. RefVal State
                               -> Maybe Tweet
-                              -> String
                               -> Eff (ref :: Ref, react :: React, dom :: DOM, trace :: Trace | eff) Unit
-handleSubmitTweet state _ "" = do
-    trace $ "won't submit an empty tweet"
-    setMessage state (errorM "Won't submit an empty tweet")
-    pure unit
+handleSubmitTweet state reply = do
+    s <- readState state
+    case (s ^. writeInputL) ^. writeInputValueL of
+        "" -> do
+            trace $ "won't submit an empty tweet"
+            setMessage state (errorM "Won't submit an empty tweet")
+            pure unit
 
-handleSubmitTweet state reply text = do
-    disableWriteInput state
-    disableHistoryButton state
-    trace $ "gonna tweet this: " ++ text
+        text -> do
+            disableWriteInput state
+            disableHistoryButton state
+            trace $ "gonna tweet this: " ++ text
 
-    let url = case reply of
-                Nothing -> "/tweet?status=" ++ text
-                Just (Tweet {id_str = reply_id}) -> "/reply?status=" ++ text ++ "&reply_to=" ++ reply_id
+            let url = case reply of
+                        Nothing -> "/tweet?status=" ++ text
+                        Just (Tweet {id_str = reply_id}) -> "/reply?status=" ++ text
+                                                            ++ "&reply_to=" ++ reply_id
 
-    (rioPost url Nothing) ~> tweetResultHandler state
-    pure unit
+            (rioPost url Nothing) ~> tweetResultHandler state
+            pure unit
 
-    where
-    tweetResultHandler state resp = do
-        hideWriteInput state
-        enableHistoryButton state
-        trace $ "tweeted " ++ show (resp :: AjaxResult)
+            where
+            tweetResultHandler state resp = do
+                hideWriteInput state
+                enableHistoryButton state
+                trace $ "tweeted " ++ show (resp :: AjaxResult)
 
-        case (fromResponse resp) of
-            ResponseError {errTitle = t, errMessage = m} -> do
-                setMessage state $ errorM m
+                case (fromResponse resp) of
+                    ResponseError {errTitle = t, errMessage = m} -> do
+                        setMessage state $ errorM m
 
-            ResponseSuccess {okTitle = _, okTweets = _} -> do
-                case reply of
-                    Nothing -> setMessage state (successM "Tweeted :-)")
-                    Just _  -> setMessage state (successM "Replied :-)")
+                    ResponseSuccess {okTitle = _, okTweets = _} -> do
+                        case reply of
+                            Nothing -> setMessage state (successM "Tweeted :-)")
+                            Just _  -> setMessage state (successM "Replied :-)")
 
-        pure unit
+                pure unit
 
 handleChange this k = do
     s <- readState this.props.state
@@ -114,13 +117,8 @@ handleChange this k = do
 handleWriteKeyPress reply this k =
     case keyEventToKeyCode k of
         Escape -> hideWriteInput this.props.state
-        Enter  -> getValue this.props.state >>= handleSubmitTweet this.props.state reply
+        Enter  -> handleSubmitTweet this.props.state reply
         x      -> pure unit
-
-    where
-    getValue state = do
-        s <- readState state
-        return $ (s ^. writeInputL) ^. writeInputValueL
 
 listenWriteKeys state = do
     bodyKeys <- J.select "body" >>= onAsObservable "keyup"
@@ -169,7 +167,7 @@ writeInputComponent = createClass spec { displayName = "writeInputComponent", re
                             , onKeyUp: eventHandler this (handleWriteKeyPress reply)  } []
 
                   , D.button { className: "writer-button ok"
-                             , onClick: (handleSubmitTweet this.props.state reply "") } [D.rawText "✓"]
+                             , onClick: (handleSubmitTweet this.props.state reply) } [D.rawText "✓"]
 
                   , D.button { className: "writer-button nok"
                              , onClick: hideWriteInput this.props.state } [D.rawText "⨯"]]
