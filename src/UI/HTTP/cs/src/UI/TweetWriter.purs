@@ -107,17 +107,6 @@ handleSubmitTweet state reply text = do
 
         pure unit
 
-foreign import setState
-  """
-  function setState(this_){
-    return function(value) {
-      return function() {
-        this_.setState({value: value})
-      }
-    }
-  }
-  """ :: forall a b r. a -> b -> Eff (|r) Unit
-
 handleChange this k = do
     s <- readState this.props.state
     writeState this.props.state (s # writeInputL .~ ( (s ^. writeInputL) # writeInputValueL .~ (value k.target) ) )
@@ -125,8 +114,13 @@ handleChange this k = do
 handleWriteKeyPress reply this k =
     case keyEventToKeyCode k of
         Escape -> hideWriteInput this.props.state
-        Enter  -> handleSubmitTweet this.props.state reply (value k.target) -- this.state.value
-        x      -> pure unit -- setState this (value k.target)
+        Enter  -> getValue this.props.state >>= handleSubmitTweet this.props.state reply
+        x      -> pure unit
+
+    where
+    getValue state = do
+        s <- readState state
+        return $ (s ^. writeInputL) ^. writeInputValueL
 
 listenWriteKeys state = do
     bodyKeys <- J.select "body" >>= onAsObservable "keyup"
@@ -165,7 +159,8 @@ writeInputComponent = createClass spec { displayName = "writeInputComponent", re
                                                   , "padding": "20px"
                                                   , "padding-top": "0px"
                                                   , "text-align": "left"
-                                                  , "margin": "auto" }} [D.rawText $ "Reply to " ++ (getAuthorsNames tweet)]
+                                                  , "margin": "auto" }} [
+                          D.rawText $ "Reply to " ++ (getAuthorsNames tweet)]
 
                   , D.input { type: "text"
                             , id: "write-input-id"
