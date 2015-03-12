@@ -163,19 +163,6 @@ instance isForeignMediaSizes :: IsForeign EntityMediaSizes where
 instance showResponse :: Show X.Response where
     show = toString
 
---retweet :: forall e eff. String
---                  -> (AjaxResult -> Eff eff Unit)
---                  -> Eff (trace :: Trace, ajax :: XI.Ajax | e) Unit
---retweet id_ retweetResultHandler = do
---    let url = "/retweet/?id=" ++ id_
---
---    trace $ "retweet " ++ url
---
---    (rioPost url Nothing) ~> retweetResultHandler
---
---    pure unit
-
-
 fromResponse :: String -> ApiResponse
 fromResponse x = case (readJSON x :: F ApiResponse) of
   Left err -> ResponseError {errTitle: "Other error", errMessage: "Can't parse response"}
@@ -209,12 +196,25 @@ initialState = State { feed: AFeed { oldFeed: OldFeed []
                      , historyButtonDisabled: false
                      , writeInput: WriteInput { visible: false
                                               , disabled: false
+                                              , value: "~"
                                               , replyTo: Nothing }
                      , contextMenu: ContextMenu { visible: false
                                                 , x: 0
                                                 , y: 0
                                                 , tweetId: Nothing }
                      , errors: [] }
+
+writeInputDisabledL :: LensP WriteInput Boolean
+writeInputDisabledL = lens (\(WriteInput x) -> x.disabled)
+                           (\(WriteInput x) v -> WriteInput (x { disabled = v }))
+
+writeInputVisibleL :: LensP WriteInput Boolean
+writeInputVisibleL = lens (\(WriteInput x) -> x.visible)
+                          (\(WriteInput x) v -> WriteInput (x { visible = v }))
+
+writeInputValueL :: LensP WriteInput String
+writeInputValueL = lens (\(WriteInput x) -> x.value)
+                        (\(WriteInput x) v -> WriteInput (x { value = v }))
 
 contextMenuL :: LensP State ContextMenu
 contextMenuL = lens (\(State s) -> s.contextMenu)

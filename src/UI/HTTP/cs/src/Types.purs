@@ -44,6 +44,7 @@ data ContextMenu = ContextMenu { visible :: Boolean
 
 data WriteInput = WriteInput { visible  :: Boolean
                              , disabled :: Boolean
+                             , value    :: String
                              , replyTo  :: Maybe Tweet }
 
 data AFeed = AFeed { oldFeed     :: OldFeed
@@ -128,17 +129,15 @@ data Observer = Observer { ok :: forall e. AjaxResult -> Eff e Unit
 
 
 data ApiResponse  = ResponseSuccess { okTitle    :: String
-                                    , okTweets   :: [Tweet]
-                                    }
+                                    , okTweets   :: [Tweet] }
 
                   | ResponseError { errTitle    :: String
-                                  , errMessage  :: String
-                                  }
+                                  , errMessage  :: String }
 
                   | Timeout { toTitle   :: String
-                            , toMessage :: String
-                            }
+                            , toMessage :: String }
 
 data CheckResponse = CheckResponse { unreadTitle :: String
                                    , unreadCount :: Number }
+
 

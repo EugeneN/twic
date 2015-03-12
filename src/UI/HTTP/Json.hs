@@ -46,7 +46,7 @@ starToJson (Left (ApiError msg)) =
 starToJson (Left (TransportError x)) =
     fromLazyByteString $ encode JsonApiError {errTitle = "Error", errMessage = T.pack $ show x}
 
-starToJson (Right t) = fromLazyByteString $ encode t
+starToJson (Right t) = fromLazyByteString $ encode JsonResponse {okTitle="ok", okTweets=[t]}
 
 tweetToJson :: Either (ApiError HttpException) Tweet -> Builder
 tweetToJson (Left (ApiError msg)) =
@@ -55,4 +55,4 @@ tweetToJson (Left (ApiError msg)) =
 tweetToJson (Left (TransportError x)) =
     fromLazyByteString $ encode JsonApiError {errTitle = "Error", errMessage = T.pack $ show x}
 
-tweetToJson (Right t) = fromLazyByteString $ encode t
+tweetToJson (Right t) = fromLazyByteString $ encode JsonResponse {okTitle="ok", okTweets=[t]}

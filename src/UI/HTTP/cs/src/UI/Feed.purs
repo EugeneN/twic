@@ -462,6 +462,13 @@ tweetMenu = createClass spec { displayName = "TweetMenu", render = renderFun }
                             D.li { "data-tweet-id": tid
                                  , title: "Retweet"
                                  , onClick: handleRetweetClick this.props.state tid} [D.rawText "RT"]
+
+                          , D.li { title: "Reply"
+                                 , onClick: handleReplyClick this.props.state tid } [D.rawText "↩"]
+
+                          , D.li { title: "Star"
+                                 , onClick: handleStarClick this.props.state tid } [D.rawText "★"]
+
                           , D.li {} [D.a {href: (getOrigTweetUrl (Author { name: "fake"
                                                                          , authorId: 0
                                                                          , screen_name: "this.props.author"
@@ -469,10 +476,6 @@ tweetMenu = createClass spec { displayName = "TweetMenu", render = renderFun }
                                                                          , profile_image_url: "-"}) tid)
                                          , target: "_blank"
                                          , title: "View original"} [D.rawText "⌘"]]
-                          , D.li { title: "Reply"
-                                 , onClick: handleReplyClick this.props.state tid } [D.rawText "↩"]
-                          , D.li { title: "Star"
-                                 , onClick: handleStarClick this.props.state tid } [D.rawText "★"]
                           ] ]
 
         Nothing -> D.span {className: "toolbar-target"} [ D.rawText "No tweet selected" ]

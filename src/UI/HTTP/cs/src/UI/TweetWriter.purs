@@ -18,14 +18,32 @@ import Utils
 import Types
 import Core
 import Optic.Core ( (.~), (^.))
+import Data.Foldable (foldl, intercalate)
 
+
+getAuthorsNames (Tweet { user = Author {name = n1}, retweet = rt}) =
+  let names = case rt of
+                  Nothing -> [n1]
+                  Just (Tweet {user =  Author {name = n2}}) -> [n1, n2]
+  in intercalate  ", " names
+
+getReplyToAuthors (Tweet {user = Author {screen_name = sn1}, retweet = rt}) =
+  let names = case rt of
+                  Nothing -> [sn1]
+                  Just (Tweet {user =  Author {screen_name = sn2}}) -> [sn1, sn2]
+  in foldl (++) "" ((\n -> "@" ++ n ++ " ") <$> names)
 
 showReplyInput :: forall eff. RefVal State
                            -> Maybe Tweet
                            -> Eff (ref :: Ref, dom :: DOM, react :: React, trace :: Trace | eff) Unit
-showReplyInput state tweet = do
+showReplyInput state mbTweet = do
     s <- readState state
-    writeState state (s # writeInputL .~ WriteInput { visible: true, disabled: false, replyTo: tweet })
+    writeState state (s # writeInputL .~ WriteInput { visible: true
+                                                    , disabled: false
+                                                    , value: case mbTweet of
+                                                        Nothing -> ""
+                                                        Just tweet -> getReplyToAuthors tweet
+                                                    , replyTo: mbTweet })
 
     forkPostpone (setFocus "write-input-id") 50
 
@@ -34,7 +52,10 @@ showWriteInput :: forall eff. RefVal State
                            -> Eff (ref :: Ref, dom :: DOM, react :: React, trace :: Trace | eff) Unit
 showWriteInput state = do
     s <- readState state
-    writeState state (s # writeInputL .~ WriteInput { visible: true, disabled: false, replyTo: Nothing })
+    writeState state (s # writeInputL .~ WriteInput { visible: true -- resetting all fields
+                                                    , disabled: false
+                                                    , value: ""
+                                                    , replyTo: Nothing })
 
     forkPostpone (setFocus "write-input-id") 50
 
@@ -42,13 +63,11 @@ hideWriteInput :: forall eff. RefVal State
                            -> Eff (ref :: Ref, dom :: DOM, react :: React, trace :: Trace | eff) Unit
 hideWriteInput state = do
     s <- readState state
-    writeState state (s # writeInputL .~ WriteInput { visible: false, disabled: false, replyTo: Nothing })
+    writeState state (s # writeInputL .~ ( (s ^. writeInputL) # writeInputVisibleL .~ false ) )
 
 disableWriteInput state = do
     s <- readState state
-    writeState state (s # writeInputL .~ WriteInput { visible: true -- TODO use prev value
-                                                    , disabled: true
-                                                    , replyTo: Nothing }) -- TODO use prev value
+    writeState state (s # writeInputL .~ ( (s ^. writeInputL) # writeInputDisabledL .~ true ) )
 
 handleSubmitTweet :: forall eff. RefVal State
                               -> Maybe Tweet
@@ -76,70 +95,86 @@ handleSubmitTweet state reply text = do
         hideWriteInput state
         enableHistoryButton state
         trace $ "tweeted " ++ show (resp :: AjaxResult)
-        -- TODO check error response
 
-        case reply of
-            Nothing -> setMessage state (successM "Tweeted :-)")
-            Just _  -> setMessage state (successM "Replied :-)")
+        case (fromResponse resp) of
+            ResponseError {errTitle = t, errMessage = m} -> do
+                setMessage state $ errorM m
+
+            ResponseSuccess {okTitle = _, okTweets = _} -> do
+                case reply of
+                    Nothing -> setMessage state (successM "Tweeted :-)")
+                    Just _  -> setMessage state (successM "Replied :-)")
 
         pure unit
 
+foreign import setState
+  """
+  function setState(this_){
+    return function(value) {
+      return function() {
+        this_.setState({value: value})
+      }
+    }
+  }
+  """ :: forall a b r. a -> b -> Eff (|r) Unit
+
+handleChange this k = do
+    s <- readState this.props.state
+    writeState this.props.state (s # writeInputL .~ ( (s ^. writeInputL) # writeInputValueL .~ (value k.target) ) )
 
 handleWriteKeyPress reply this k =
     case keyEventToKeyCode k of
         Escape -> hideWriteInput this.props.state
-        Enter  -> handleSubmitTweet this.props.state reply (value k.target)
-        _      -> pure unit
+        Enter  -> handleSubmitTweet this.props.state reply (value k.target) -- this.state.value
+        x      -> pure unit -- setState this (value k.target)
 
 listenWriteKeys state = do
     bodyKeys <- J.select "body" >>= onAsObservable "keyup"
 
     let keyCodesS = keyEventToKeyCode <$> bodyKeys
 
-    (filterRx ((==) F2) keyCodesS)     ~> \_ -> showWriteInput state
+    (filterRx ((==) F2)     keyCodesS) ~> \_ -> showWriteInput state
     (filterRx ((==) Escape) keyCodesS) ~> \_ -> hideWriteInput state
 
 
 writeInputComponent :: ComponentClass { state :: RefVal State } {}
 writeInputComponent = createClass spec { displayName = "writeInputComponent", render = renderFun }
     where
-      getAuthor (Tweet { user = Author {name = username} }) = username
-      getAuthorSN (Tweet { user = Author {screen_name = sn} }) = sn
-      renderFun this = do
-        State { writeInput = (WriteInput { visible = visible
-                                         , disabled = disabled
-                                         , replyTo: reply } ) } <- readState this.props.state
+    renderFun this = do
+      State { writeInput = (WriteInput { visible  = visible
+                                       , disabled = disabled
+                                       , value    = value
+                                       , replyTo  = reply } ) } <- readState this.props.state
 
-        pure $
-            D.div { className: "write-tweet"
-                  , disabled: disabled
-                  , onContextMenu: stopPropagation
-                  , style: { display: if visible then "block" else "none"
-                           , height: case reply of
-                                        Nothing -> "50px"
-                                        Just _  -> "100px"
-                           , transform: case reply of
-                                            Nothing -> "translateY(-70px)"
-                                            Just _  -> "translateY(-140px)"
-                           }} [
-                      case reply of
-                        Nothing    -> D.div {} []
-                        Just tweet -> D.div {style: { "color": "white"
-                                                    , "width": "710px"
-                                                    , "padding": "20px"
-                                                    , "padding-top": "0px"
-                                                    , "text-align": "left"
-                                                    , "margin": "auto" }} [D.rawText $ "Reply to " ++ (getAuthor tweet)]
+      pure $
+          D.div { className: "write-tweet"
+                , disabled: disabled
+                , onContextMenu: stopPropagation
+                , style: { display: if visible then "block" else "none"
+                         , height: case reply of
+                                      Nothing -> "50px"
+                                      Just _  -> "100px"
+                         , transform: case reply of
+                                          Nothing -> "translateY(-70px)"
+                                          Just _  -> "translateY(-140px)"
+                         }} [
+                    case reply of
+                      Nothing    -> D.div {} []
+                      Just tweet -> D.div {style: { "color": "white"
+                                                  , "width": "710px"
+                                                  , "padding": "20px"
+                                                  , "padding-top": "0px"
+                                                  , "text-align": "left"
+                                                  , "margin": "auto" }} [D.rawText $ "Reply to " ++ (getAuthorsNames tweet)]
 
-                    , D.input { "type": "text"
-                              , "id": "write-input-id"
-                              , "value": case reply of
-                                            Nothing -> ""
-                                            Just tweet -> "@" ++ getAuthorSN tweet ++ " "
-                              , onKeyUp: eventHandler this (handleWriteKeyPress reply)  } []
+                  , D.input { type: "text"
+                            , id: "write-input-id"
+                            , value: value
+                            , onChange: eventHandler this handleChange
+                            , onKeyUp: eventHandler this (handleWriteKeyPress reply)  } []
 
-                    , D.button { className: "writer-button ok"
-                               , onClick: (handleSubmitTweet this.props.state reply "") } [D.rawText "✓"]
+                  , D.button { className: "writer-button ok"
+                             , onClick: (handleSubmitTweet this.props.state reply "") } [D.rawText "✓"]
 
-                    , D.button { className: "writer-button nok"
-                               , onClick: hideWriteInput this.props.state } [D.rawText "⨯"]]
+                  , D.button { className: "writer-button nok"
+                             , onClick: hideWriteInput this.props.state } [D.rawText "⨯"]]
