@@ -87,13 +87,16 @@ instance asHtmlUser :: AsHtml User where
                       Just desc -> D.rawText desc]
         , D.li {style: { margin: "0px", padding: "5px" }} [case u.userURL of
                       Nothing -> D.rawText ""
-                      Just url -> D.a {style: {color: "white"}, href: url, target: "_blank"} [D.rawText url]]
+                      Just url -> D.a { style: { color: "white"
+                                               , "text-decoration": "underline"}
+                                      , href: url
+                                      , target: "_blank"} [D.rawText url]]
         , D.li {style: { margin: "0px", padding: "5px" }} [case u.userLocation of
                       Nothing -> D.rawText ""
                       Just loc -> D.rawText loc]
         , D.li {style: { margin: "0px", padding: "5px" }} [case u.userTimeZone of
                       Nothing -> D.rawText ""
-                      Just tz -> D.rawText tz]
+                      Just tz -> D.rawText $ tz ++ " timezone"]
         , D.li {style: { margin: "0px", padding: "5px" }} [D.rawText $ "Registered on " ++ u.userCreatedAt]
         , D.li {style: { margin: "0px", padding: "5px" }} [D.rawText $ show u.userFollowersCount ++ " followers, " ++
                                show u.userFriendsCount ++ " friends, " ++
@@ -126,7 +129,9 @@ userInfo = createClass spec { displayName = "Messages", render = renderFun } whe
                          } } [
 
                     case mbUser of
-                        Nothing -> D.rawText "No user info available yet"
+                        Nothing -> D.img { src: "/snake-loader-darkbg.gif"
+                                         , style: { position: "relative"
+                                                  , top: "200px" } } []
                         Just user -> asHtml this.props.state user
 
                   , D.button { className: "writer-button nok"
