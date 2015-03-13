@@ -3,7 +3,8 @@
 module UI.HTTP.Json where
 
 import           BL.Core
-import           BL.Types                            (JsonUnreadCount (..))
+import           BL.Types                            (JsonUnreadCount (..),
+                                                      JsonUserInfo (..))
 import           Blaze.ByteString.Builder            (Builder)
 import           Blaze.ByteString.Builder.ByteString (fromLazyByteString)
 import           Data.Aeson
@@ -11,6 +12,7 @@ import qualified Data.ByteString.Lazy                as B
 import qualified Data.Text                           as T
 import           Debug.Trace                         (trace)
 import           Network.HTTP.Conduit                (HttpException)
+import           Web.Twitter.Types                   (User)
 
 
 justTweetsToJson :: Either (ApiError HttpException) [Tweet] -> Builder
@@ -25,6 +27,16 @@ justTweetsToJson (Right []) =
 
 justTweetsToJson (Right ts) =
     fromLazyByteString $ encode JsonResponse {okTweets = ts, okTitle = T.pack $ show (length ts) ++ " new tweets"}
+
+justUserToJson :: User -> Builder
+justUserToJson user = fromLazyByteString $ encode JsonUserInfo {uiData = user, uiTitle = "userinfo"}
+
+justUserInfoToJson :: Either (ApiError HttpException) User -> Builder
+justUserInfoToJson (Left (ApiError msg)) =
+    fromLazyByteString $ encode JsonApiError {errTitle = "Error", errMessage = T.pack msg}
+
+justUserInfoToJson (Right ui) =
+    fromLazyByteString $ encode JsonUserInfo {uiData = ui, uiTitle = "userinfo"}
 
 
 justUnreadCountToJson :: Int -> Builder

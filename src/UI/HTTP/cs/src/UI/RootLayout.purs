@@ -12,6 +12,7 @@ import UI.Feed (tweetsList, checkButton, historyButton, tweetMenu)
 import UI.Messages (errorsList)
 import UI.TweetWriter (writeInputComponent, showWriteInput)
 import UI.FeedMetadata (feedMetadata)
+import UI.UserInfo (userInfo)
 import Types
 import Core
 import Utils
@@ -56,6 +57,9 @@ rootLayout =
 
           , D.div { id: "ctx-menu-container-id" } [
               (tweetMenu {state: this.props.state} [])]
+
+          , D.div { id: "userinfo-container-id" } [
+              (userInfo {state: this.props.state} [])]
         ]
 
 renderRootLayout :: forall eff. String

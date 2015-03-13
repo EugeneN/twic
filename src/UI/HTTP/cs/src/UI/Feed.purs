@@ -26,6 +26,7 @@ import Types
 import UI.Types
 import UI.TweetWriter (showReplyInput)
 import Optic.Core ( (.~), (^.))
+import UI.UserInfo (loadUserInfo)
 
 showNewTweets :: forall eff. RefVal State
                           -> Eff (ref :: Ref, dom :: DOM, react :: React | eff) Unit
@@ -241,16 +242,16 @@ startWsClient state = do
     pure unit
 
     where
-        onMessage m = onNewTweets state $ fromWsMessage m
+    onMessage m = onNewTweets state $ fromWsMessage m
 
-        onError = do
-            trace $ "ws error"
-            pure unit
+    onError = do
+        trace $ "ws error"
+        pure unit
 
-        onClose = do
-            trace "ws closed"
-            startWsClient state
-            pure unit
+    onClose = do
+        trace "ws closed"
+        startWsClient state
+        pure unit
 
 handleRetweetClick state id_ = do
     let url = "/retweet/?id=" ++ id_
@@ -259,11 +260,11 @@ handleRetweetClick state id_ = do
     pure unit
 
     where
-        retweetResultHandler resp = do
-            enableHistoryButton state
-            trace $ "retweeted " ++ show (resp :: AjaxResult)
-            setMessage state (successM "Retweeted :-)")
-            pure unit
+    retweetResultHandler resp = do
+        enableHistoryButton state
+        trace $ "retweeted " ++ show (resp :: AjaxResult)
+        setMessage state (successM "Retweeted :-)")
+        pure unit
 
 handleStarClick state id_ = do
     let url = "/star?id=" ++ id_
@@ -272,11 +273,15 @@ handleStarClick state id_ = do
     pure unit
 
     where
-        starResultHandler resp = do
-            enableHistoryButton state
-            trace $ "starred " ++ show (resp :: AjaxResult)
-            setMessage state (successM "Starred :-)")
-            pure unit
+    starResultHandler resp = do
+        enableHistoryButton state
+        trace $ "starred " ++ show (resp :: AjaxResult)
+        setMessage state (successM "Starred :-)")
+        pure unit
+
+handleAuthorContextMenu state author@(Author {screen_name=sn}) ev = do
+  stopPropagation ev
+  loadUserInfo state author
 
 getTweetById :: forall eff. RefVal State
                          -> TweetIdS
@@ -297,17 +302,6 @@ handleReplyClick state id_ = do
     case x of
         Nothing    -> setMessage state (errorM $ "Cant't find tweet with id=" ++ id_)
         Just tweet -> showReplyInput state x
-
-    ----setMessage state (successM "Fake Reply here :-)")
-    --let url = "/reply?id=" ++ id_
-    --(rioPost url Nothing) ~> starResultHandler
-    ----pure unit
-
-    --where
-    --    starResultHandler resp = do
-    --        trace $ "replyed " ++ show (resp :: AjaxResult)
-    --        setMessage state (successM "Replyed :-)")
-    --        pure unit
 
 feedClickHandler ev = do
     trace "got mouse click"
@@ -429,6 +423,7 @@ instance asHtmlAuthor :: AsHtml Author where
                 D.img { className: "user-icon-img"
                       , style: { "cursor": "pointer" }
                       , onClick: loadUserFeed state a
+                      , onContextMenu: (callEventHandler $ handleAuthorContextMenu state a)
                       , src: avatar, title: n} []]]
 
 instance asHtmlEntities :: AsHtml Entities where
@@ -531,6 +526,7 @@ tweetComponent = createClass spec { displayName = "Tweet" , render = renderFun }
                           , onClick: loadUserFeed state b
                           , style: { "cursor": "pointer" }
                           , src: origAvatar
+                          , onContextMenu: (callEventHandler $ handleAuthorContextMenu state b)
                           , title: "Original author: " ++ origName} []]]
           , D.span {className: "user-icon1"} [
                 D.span {href: "https://twitter.com/" ++ sn, target: "_blank"} [
@@ -538,6 +534,7 @@ tweetComponent = createClass spec { displayName = "Tweet" , render = renderFun }
                           , onClick: loadUserFeed state a
                           , style: { "cursor": "pointer" }
                           , src: avatar
+                          , onContextMenu: (callEventHandler $ handleAuthorContextMenu state a)
                           , title: name} []]]
           ]
 

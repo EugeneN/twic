@@ -14,6 +14,7 @@ import           Data.Int               (Int64)
 import           Data.Text              (Text)
 import           Data.Time.Clock        (UTCTime (..))
 import           GHC.Generics
+import           Web.Twitter.Types      (User (..))
 
 type Url = String
 type Username = String
@@ -118,6 +119,10 @@ data JsonApiError = JsonApiError { errTitle   :: Text
 
 data JsonResponse = JsonResponse { okTitle  :: Text
                                  , okTweets :: [Tweet]
+                                 } deriving (Show, Generic)
+
+data JsonUserInfo = JsonUserInfo { uiTitle :: Text
+                                 , uiData  :: User
                                  } deriving (Show, Generic)
 
 data Exception a => ApiError a = ApiError String | TransportError a deriving Show

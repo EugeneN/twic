@@ -4,10 +4,12 @@
 :m src/Main.purs
 :m src/Types.purs
 :m src/UI/Feed.purs
+:m src/UI/FeedMetadata.purs
 :m src/UI/Messages.purs
 :m src/UI/RootLayout.purs
 :m src/UI/TweetWriter.purs
 :m src/UI/Types.purs
+:m src/UI/UserInfo.purs
 :m src/Utils.purs
 :m bower_components/purescript-arrays/src/Data/Array.purs
 :m bower_components/purescript-arrays/src/Data/Array/ST.purs

@@ -4,6 +4,7 @@ import Debug.Trace
 import Control.Monad.Eff.Ref
 import Control.Monad.Eff (Eff(..))
 import Data.Foreign
+import Data.Foreign.Index (hasOwnProperty)
 import Data.Foreign.Class
 import Data.Foreign.NullOrUndefined
 import DOM (DOM(..))
@@ -32,6 +33,90 @@ toTweetToken "PlainText"    = PlainText
 toTweetToken "Hashtag"      = Hashtag
 toTweetToken "Spaces"       = Spaces
 toTweetToken "Unparsable"   = Unparsable
+
+instance isForeignUser :: IsForeign User where
+    read rawObj = do
+         userContributorsEnabled              <- readProp "contributors_enabled" rawObj
+         userCreatedAt                        <- readProp "created_at" rawObj
+         userDefaultProfile                   <- readProp "default_profile" rawObj
+         userDefaultProfileImage              <- readProp "default_profile_image" rawObj
+         userDescription                      <- runNullOrUndefined <$> readProp "description" rawObj
+         userFavoritesCount                   <- readProp "favourites_count" rawObj
+         userFollowRequestSent                <- runNullOrUndefined <$> readProp "follow_request_sent" rawObj
+         userFollowing                        <- runNullOrUndefined <$> readProp "following" rawObj
+         userFollowersCount                   <- readProp "followers_count" rawObj
+         userFriendsCount                     <- readProp "friends_count" rawObj
+         userGeoEnabled                       <- readProp "geo_enabled" rawObj
+         userId                               <- readProp "id" rawObj
+         userIsTranslator                     <- readProp "is_translator" rawObj
+         userLang                             <- readProp "lang" rawObj
+         userListedCount                      <- readProp "listed_count" rawObj
+         userLocation                         <- runNullOrUndefined <$> readProp "location" rawObj
+         userName                             <- readProp "name" rawObj
+         userNotifications                    <- runNullOrUndefined <$> readProp "notifications" rawObj
+         userProfileBackgroundColor           <- runNullOrUndefined <$> readProp "profile_background_color" rawObj
+         userProfileBackgroundImageURL        <- runNullOrUndefined <$> readProp "profile_background_image_url" rawObj
+         userProfileBackgroundImageURLHttps   <- runNullOrUndefined <$> readProp "profile_background_image_url_https" rawObj
+         userProfileBackgroundTile            <- runNullOrUndefined <$> readProp "profile_background_tile" rawObj
+         userProfileBannerURL                 <- runNullOrUndefined <$> readProp "profile_banner_url" rawObj
+         userProfileImageURL                  <- runNullOrUndefined <$> readProp "profile_image_url" rawObj
+         userProfileImageURLHttps             <- runNullOrUndefined <$> readProp "profile_image_url_https" rawObj
+         userProfileLinkColor                 <- readProp "profile_link_color" rawObj
+         userProfileSidebarBorderColor        <- readProp "profile_sidebar_border_color" rawObj
+         userProfileSidebarFillColor          <- readProp "profile_sidebar_fill_color" rawObj
+         userProfileTextColor                 <- readProp "profile_text_color" rawObj
+         userProfileUseBackgroundImage        <- readProp "profile_use_background_image" rawObj
+         userProtected                        <- readProp "protected" rawObj
+         userScreenName                       <- readProp "screen_name" rawObj
+         userShowAllInlineMedia               <- runNullOrUndefined <$> readProp "show_all_inline_media" rawObj
+         userStatusesCount                    <- readProp "statuses_count" rawObj
+         userTimeZone                         <- runNullOrUndefined <$> readProp "time_zone" rawObj
+         userURL                              <- runNullOrUndefined <$> readProp "url" rawObj
+         userUtcOffset                        <- runNullOrUndefined <$> readProp "utc_offset" rawObj
+         userVerified                         <- readProp "verified" rawObj
+         userWithheldInCountries              <- runNullOrUndefined <$> readProp "withheld_in_countries" rawObj
+         userWithheldScope                    <- runNullOrUndefined <$> readProp "withheld_scope" rawObj
+         
+         return $ User  { userContributorsEnabled              : userContributorsEnabled
+                        , userCreatedAt                        : userCreatedAt
+                        , userDefaultProfile                   : userDefaultProfile
+                        , userDefaultProfileImage              : userDefaultProfileImage
+                        , userDescription                      : userDescription
+                        , userFavoritesCount                   : userFavoritesCount
+                        , userFollowRequestSent                : userFollowRequestSent
+                        , userFollowing                        : userFollowing
+                        , userFollowersCount                   : userFollowersCount
+                        , userFriendsCount                     : userFriendsCount
+                        , userGeoEnabled                       : userGeoEnabled
+                        , userId                               : userId
+                        , userIsTranslator                     : userIsTranslator
+                        , userLang                             : userLang
+                        , userListedCount                      : userListedCount
+                        , userLocation                         : userLocation
+                        , userName                             : userName
+                        , userNotifications                    : userNotifications
+                        , userProfileBackgroundColor           : userProfileBackgroundColor
+                        , userProfileBackgroundImageURL        : userProfileBackgroundImageURL
+                        , userProfileBackgroundImageURLHttps   : userProfileBackgroundImageURLHttps
+                        , userProfileBackgroundTile            : userProfileBackgroundTile
+                        , userProfileBannerURL                 : userProfileBannerURL
+                        , userProfileImageURL                  : userProfileImageURL
+                        , userProfileImageURLHttps             : userProfileImageURLHttps
+                        , userProfileLinkColor                 : userProfileLinkColor
+                        , userProfileSidebarBorderColor        : userProfileSidebarBorderColor
+                        , userProfileSidebarFillColor          : userProfileSidebarFillColor
+                        , userProfileTextColor                 : userProfileTextColor
+                        , userProfileUseBackgroundImage        : userProfileUseBackgroundImage
+                        , userProtected                        : userProtected
+                        , userScreenName                       : userScreenName
+                        , userShowAllInlineMedia               : userShowAllInlineMedia
+                        , userStatusesCount                    : userStatusesCount
+                        , userTimeZone                         : userTimeZone
+                        , userURL                              : userURL
+                        , userUtcOffset                        : userUtcOffset
+                        , userVerified                         : userVerified
+                        , userWithheldInCountries              : userWithheldInCountries
+                        , userWithheldScope                    : userWithheldScope }
 
 instance isForeignTweetElement :: IsForeign TweetElement where
     read data_ = do
@@ -74,22 +159,32 @@ instance isForeignTweet :: IsForeign Tweet where
                        , retweet: r
                        }
 
-instance isForeignResponseError :: IsForeign ApiResponse
-    where
-        read data_ =
-            case (readProp "errTitle" data_) of
-              Left err -> case (readProp "okTitle" data_) of
-                Left err' ->
-                  return $ ResponseError { errTitle: "Other error"
-                                         , errMessage: "Can't parse response 1"}
+readX data_ | hasOwnProperty "errTitle" data_ = do
+    m <- readProp "errMessage" data_
+    t <- readProp "errTitle" data_
+    return $ ResponseError {errTitle: t, errMessage: m}
 
-                Right t' -> do
-                  ts <- readProp "okTweets" data_
-                  return $ ResponseSuccess {okTitle: t', okTweets: ts}
+readX data_ | hasOwnProperty "okTitle" data_ = do
+    ts <- readProp "okTweets" data_
+    t  <- readProp "okTitle" data_
+    return $ ResponseSuccess {okTitle: t, okTweets: ts}
 
-              Right t -> do
-                m <- readProp "errMessage" data_
-                return $ ResponseError {errTitle: t, errMessage: m}
+readX data_ | hasOwnProperty "toTitle" data_ = do
+    m <- readProp "toMessage" data_
+    t <- readProp "toTitle" data_
+    return $ ResponseTimeout {toTitle: t, toMessage: m}
+
+readX data_ | hasOwnProperty "uiTitle" data_ = do
+    d <- readProp "uiData" data_
+    t <- readProp "uiTitle" data_
+    return $ ResponseUserinfo {uiTitle: t, uiData: d}
+
+readX data_ | otherwise = return $ ResponseError { errTitle: "Other error"
+                                                 , errMessage: "Can't parse response 1" }
+
+instance isForeignResponseError :: IsForeign ApiResponse where
+  read = readX
+
 
 instance isForeignCheckResponse :: IsForeign CheckResponse where
     read x = do
@@ -165,7 +260,7 @@ instance showResponse :: Show X.Response where
 
 fromResponse :: String -> ApiResponse
 fromResponse x = case (readJSON x :: F ApiResponse) of
-  Left err -> ResponseError {errTitle: "Other error", errMessage: "Can't parse response"}
+  Left err -> ResponseError {errTitle: "Other error", errMessage: ("Can't parse response: " ++ toString err)}
   Right resp -> resp
 
 
@@ -194,6 +289,8 @@ initialState = State { feed: AFeed { oldFeed: OldFeed []
                                    , newFeed: NewFeed [] }
                      , extraFeed: Nothing
                      , historyButtonDisabled: false
+                     , userInfo: UserInfo { visible: false
+                                          , userdata: Nothing }
                      , writeInput: WriteInput { visible: false
                                               , disabled: false
                                               , value: "~"
@@ -203,6 +300,18 @@ initialState = State { feed: AFeed { oldFeed: OldFeed []
                                                 , y: 0
                                                 , tweetId: Nothing }
                      , errors: [] }
+
+userInfoL :: LensP State UserInfo
+userInfoL = lens (\(State s) -> s.userInfo)
+                 (\(State s) ui -> State (s { userInfo = ui }))
+
+userInfoVisibleL :: LensP UserInfo Boolean
+userInfoVisibleL = lens (\(UserInfo x) -> x.visible)
+                        (\(UserInfo x) v -> UserInfo (x { visible = v }))
+
+userInfoUserdataL :: LensP UserInfo (Maybe User)
+userInfoUserdataL = lens (\(UserInfo x) -> x.userdata)
+                         (\(UserInfo x) d -> UserInfo (x { userdata = d }))
 
 writeInputDisabledL :: LensP WriteInput Boolean
 writeInputDisabledL = lens (\(WriteInput x) -> x.disabled)

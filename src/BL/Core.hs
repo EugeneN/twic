@@ -8,7 +8,7 @@ module BL.Core (
   , Author(..)
   , Username
   , ApiError(..)
-  , Entities(..)
+  , BL.Types.Entities(..)
   , EntityUrl(..)
   , EntityMedia(..)
   , TweetElement(..)
@@ -23,6 +23,7 @@ module BL.Core (
   , updateFeed
   , updateFeedSync
   , readUserstream
+  , readUserInfo
   , retweetUrl
   , getRunTime
   , tweetUrl
@@ -69,7 +70,13 @@ import           GHC.Generics
 import           Prelude                   hiding (error)
 import           System.Log.Handler.Simple
 import           System.Log.Logger
+import           Web.Twitter.Conduit.Api   (usersShow)
+import           Web.Twitter.Conduit.Parameters   (UserParam( ScreenNameParam ))
+import           Web.Twitter.Conduit.Base  (call)
 import qualified Web.Twitter.Types         as TT
+import           Web.Twitter.Types
+import           Web.Twitter.Conduit
+import qualified Data.ByteString.Char8     as BS
 
 logRealm = "Core"
 
@@ -90,7 +97,7 @@ mycred = newCredential (B8.pack CFG.accessToken) (B8.pack CFG.accessTokenSecret)
 
 retweetStatusToTweet :: TT.RetweetedStatus -> Tweet
 retweetStatusToTweet s = Tweet (parseTweet $ TT.rsText s)
-                               (pack $ TT.rsCreatedAt s)
+                               (pack $ show $ TT.rsCreatedAt s)
                                (fromIntegral (TT.rsId s) :: Int64)
                                (show $ TT.rsId s)
                                (statusUserToAuthor $ TT.rsUser s)
@@ -100,7 +107,7 @@ retweetStatusToTweet s = Tweet (parseTweet $ TT.rsText s)
 statusRetweetToRetweet :: Maybe TT.Status -> Maybe Tweet
 statusToTweet :: TT.Status -> Tweet
 statusToTweet s = Tweet (parseTweet $ TT.statusText s)
-                        (pack $ TT.statusCreatedAt s)
+                        (pack $ show $ TT.statusCreatedAt s)
                         (fromIntegral (TT.statusId s) :: Int64)
                         (show $ TT.statusId s)
                         (statusUserToAuthor $ TT.statusUser s)
@@ -119,7 +126,7 @@ statusUserToAuthor s = Author (TT.userName s)
             Just y -> unpack y
 
 
-statusEntitiesToEntities :: Maybe TT.Entities -> Entities
+statusEntitiesToEntities :: Maybe TT.Entities -> BL.Types.Entities
 statusEntitiesToEntities Nothing  = BL.Types.Entities [] [] Nothing
 statusEntitiesToEntities (Just s) = BL.Types.Entities (xUrl <$> TT.enURLs s)
                                                       (xHashtag <$> TT.enHashTags s)
@@ -175,6 +182,12 @@ instance ToJSON JsonApiError
 
 instance FromJSON JsonResponse
 instance ToJSON JsonResponse
+
+instance FromJSON JsonUserInfo
+instance ToJSON JsonUserInfo
+
+-- instance FromJSON User
+-- instance ToJSON User
 
 instance FromJSON BL.Types.Entities where
   parseJSON (Object x) = BL.Types.Entities <$> x .: "urls"
@@ -369,9 +382,26 @@ handleIncomingTweets _ fv ts = do
 readUserstream :: ScreenName -> Int -> IO (Either (ApiError HttpException) [Tweet])
 readUserstream sn count = do
     info $ "reading userstream where ScreenName=" ++ show sn ++ " and count=" ++ show count
-    (_, res) <- readApi $ userTimeline (unpack sn) count
+    (_, res) <- readApi $ BL.Core.userTimeline (unpack sn) count
     return res
 
+
+--readuserInfo :: ScreenName -> IO (Either (ApiError HttpException) UserInfo)
+readUserInfo sn = withManager $ \mgr -> do
+    res <- call twInfo mgr $ usersShow (ScreenNameParam sn)
+    return res -- res :: MonadResource User
+
+    where
+    twInfo :: TWInfo
+    twInfo = setCredential tokens credential def
+
+    credential :: Credential
+    credential = Credential [ ("oauth_token", BS.pack CFG.accessToken)
+                            , ("oauth_token_secret", BS.pack CFG.accessTokenSecret) ]
+
+    tokens :: OAuth
+    tokens = twitterOAuth { oauthConsumerKey = BS.pack CFG.oauthConsumerKey
+                          , oauthConsumerSecret = BS.pack CFG.oauthConsumerSecret }
 
 readHistory :: TweetId -> Int -> IO (Either (ApiError HttpException) [Tweet])
 readHistory maxid count = do
@@ -425,7 +455,7 @@ writeApi url = do
 
         Left e -> return $ Left $ ApiError $ "Other status exception: " ++ show e
 
-        Right r -> case eitherDecode $ responseBody r of
+        Right r -> case eitherDecode $ Network.HTTP.Conduit.responseBody r of
             Left msg -> return $ Left $ ApiError msg
             Right t  -> return $ Right t
 
@@ -442,7 +472,7 @@ readApi feed = do
     Left x ->
       return (feed, Left $ TransportError x)
 
-    Right r -> case eitherDecode $ responseBody r of
+    Right r -> case eitherDecode $ Network.HTTP.Conduit.responseBody r of
       Left msg -> return (feed, Left $ ApiError msg)
       Right ts -> return (feed, Right ts)
 

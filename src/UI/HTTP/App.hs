@@ -2,14 +2,17 @@
 
 module UI.HTTP.App where
 
-import           BL.Core                             (getStatus, retweetUrl,
-                                                      saveLastSeen, readHistory,
-                                                      saveLastSeenAsync, replyUrl,
-                                                      starUrl, tweetUrl, readUserstream,
+import           BL.Core                             (getStatus, readHistory,
+                                                      readUserInfo,
+                                                      readUserstream, replyUrl,
+                                                      retweetUrl, saveLastSeen,
+                                                      saveLastSeenAsync,
+                                                      starUrl, tweetUrl,
                                                       updateFeed, writeApi)
 import           BL.DataLayer                        (MyDb)
 import           BL.Types                            (FeedState, Message (..),
-                                                      Tweet, TweetBody, TweetId, ScreenName,
+                                                      ScreenName, Tweet,
+                                                      TweetBody, TweetId,
                                                       UpdateMessage)
 import           Blaze.ByteString.Builder            (Builder, fromByteString)
 import           Config                              (heartbeatDelay)
@@ -52,6 +55,8 @@ import           UI.HTTP.Html                        (homePage,
                                                       tweetsToHtml)
 import           UI.HTTP.Json                        (justTweetsToJson,
                                                       justUnreadCountToJson,
+                                                      justUserInfoToJson,
+                                                      justUserToJson,
                                                       retweetToJson, starToJson,
                                                       tweetToJson)
 
@@ -97,6 +102,7 @@ httpapp st db request sendResponse = do
         "stat"          -> statHandler st db request sendResponse
         "history"       -> historyHandler request sendResponse
         "userfeed"      -> userfeedHandler request sendResponse
+        "userinfo"      -> userinfoHandler request sendResponse
         _               -> notFoundHandler request sendResponse
 
 makeClient :: UUID -> WS.Connection -> Client
@@ -258,6 +264,18 @@ userfeedHandler request response = case queryString request of
         userfeedStream :: ScreenName -> (Builder -> IO ()) -> IO () -> IO ()
         userfeedStream sn send flush =
             readUserstream sn 200 >>= send . justTweetsToJson >> flush
+
+userinfoHandler :: Application
+userinfoHandler request response = case queryString request of
+    [("sn", Just screenName)] ->
+        response $ responseStream status200 [mimeJSON] (userinfoStream (decodeUtf8 screenName))
+
+    _ -> response $ responseLBS status200 [mimeJSON] "bad request"
+
+    where
+        userinfoStream :: ScreenName -> (Builder -> IO ()) -> IO () -> IO ()
+        userinfoStream sn send flush =
+            readUserInfo (T.unpack sn) >>= send . justUserToJson >> flush
 
 tweetHandler :: Application
 tweetHandler request response = case queryString request of

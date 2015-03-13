@@ -47,6 +47,9 @@ data WriteInput = WriteInput { visible  :: Boolean
                              , value    :: String
                              , replyTo  :: Maybe Tweet }
 
+data UserInfo = UserInfo { visible :: Boolean
+                         , userdata :: Maybe User }
+
 data AFeed = AFeed { oldFeed     :: OldFeed
                    , currentFeed :: CurrentFeed
                    , newFeed     :: NewFeed }
@@ -61,6 +64,7 @@ data State = State { feed        :: AFeed
                    , errors      :: [StatusMessage]
                    , contextMenu :: ContextMenu
                    , writeInput  :: WriteInput
+                   , userInfo    :: UserInfo
                    , historyButtonDisabled :: Boolean }
 
 
@@ -127,15 +131,62 @@ type AjaxResult = String
 data Observer = Observer { ok :: forall e. AjaxResult -> Eff e Unit
                          , nok :: Maybe (forall e. AjaxResult -> Eff e Unit) }
 
+type UTCTime = String
+type UserId = Number
+type LanguageCode = String
 
-data ApiResponse  = ResponseSuccess { okTitle    :: String
-                                    , okTweets   :: [Tweet] }
+data User = User { userContributorsEnabled              :: Boolean
+                 , userCreatedAt                        :: UTCTime
+                 , userDefaultProfile                   :: Boolean
+                 , userDefaultProfileImage              :: Boolean
+                 , userDescription                      :: Maybe String
+                 , userFavoritesCount                   :: Number
+                 , userFollowRequestSent                :: Maybe Boolean
+                 , userFollowing                        :: Maybe Boolean
+                 , userFollowersCount                   :: Number
+                 , userFriendsCount                     :: Number
+                 , userGeoEnabled                       :: Boolean
+                 , userId                               :: UserId
+                 , userIsTranslator                     :: Boolean
+                 , userLang                             :: LanguageCode
+                 , userListedCount                      :: Number
+                 , userLocation                         :: Maybe String
+                 , userName                             :: String
+                 , userNotifications                    :: Maybe Boolean
+                 , userProfileBackgroundColor           :: Maybe String
+                 , userProfileBackgroundImageURL        :: Maybe Url
+                 , userProfileBackgroundImageURLHttps   :: Maybe Url
+                 , userProfileBackgroundTile            :: Maybe Boolean
+                 , userProfileBannerURL                 :: Maybe Url
+                 , userProfileImageURL                  :: Maybe Url
+                 , userProfileImageURLHttps             :: Maybe Url
+                 , userProfileLinkColor                 :: String
+                 , userProfileSidebarBorderColor        :: String
+                 , userProfileSidebarFillColor          :: String
+                 , userProfileTextColor                 :: String
+                 , userProfileUseBackgroundImage        :: Boolean
+                 , userProtected                        :: Boolean
+                 , userScreenName                       :: String
+                 , userShowAllInlineMedia               :: Maybe Boolean
+                 , userStatusesCount                    :: Number
+                 , userTimeZone                         :: Maybe String
+                 , userURL                              :: Maybe Url
+                 , userUtcOffset                        :: Maybe Number
+                 , userVerified                         :: Boolean
+                 , userWithheldInCountries              :: Maybe String
+                 , userWithheldScope                    :: Maybe String }
+
+data ApiResponse  = ResponseSuccess { okTitle   :: String    -- TODO rename ResponseSuccess to ResponseTweets
+                                    , okTweets  :: [Tweet] }
 
                   | ResponseError { errTitle    :: String
                                   , errMessage  :: String }
 
-                  | Timeout { toTitle   :: String
-                            , toMessage :: String }
+                  | ResponseTimeout { toTitle   :: String
+                                    , toMessage :: String }
+
+                  | ResponseUserinfo { uiTitle  :: String
+                                     , uiData   :: User }
 
 data CheckResponse = CheckResponse { unreadTitle :: String
                                    , unreadCount :: Number }
