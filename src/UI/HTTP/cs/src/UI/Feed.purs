@@ -378,6 +378,7 @@ instance asHtmlTweetElement :: AsHtml TweetElement where
     asHtml s (AtUsername sn)   = D.span {className: "username-tag"} [
                                   D.span { href: ("https://twitter.com/" ++ sn)
                                          , onClick: loadUserFeedByName s sn
+                                         --, onContextMenu: (callEventHandler $ handleAuthorContextMenu state a)
                                          , style: { "cursor": "pointer"
                                                   , "color": "black" }
                                          , target: "_blank" } [D.rawText $ "@" ++ sn]]

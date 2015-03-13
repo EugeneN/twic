@@ -15,6 +15,7 @@ import Control.Monad.Eff.Ref
 import Utils
 import Optic.Core ( (.~), (^.))
 import Core
+import UI.Feed (handleAuthorContextMenu)
 
 handleBack :: forall eff. RefVal State -> Eff (ref :: Ref | eff) Unit
 handleBack state = do
@@ -27,7 +28,7 @@ feedMetadata = createClass spec { displayName = "feedMetadata", render = renderF
         State { extraFeed = maybeEF } <- readState this.props.state
 
         case maybeEF of
-            Just (BFeed { author = (Author { name = n
+            Just (BFeed { author = a@(Author { name = n
                                            , screen_name = sn
                                            , profile_image_url = avatar}) })  -> pure $
                 D.div {className: "feed-meta"} [
@@ -46,6 +47,7 @@ feedMetadata = createClass spec { displayName = "feedMetadata", render = renderF
                         D.a {href: "https://twitter.com/" ++ sn, target: "_blank"} [
                             D.img { className: "user-icon-img"
                                   , src: avatar
+                                  , onContextMenu: (callEventHandler $ handleAuthorContextMenu this.props.state a)
                                   , title: n} [] ] ] ]
 
             Nothing -> pure $ D.div {} []

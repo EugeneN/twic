@@ -24,9 +24,9 @@ import qualified Network.XHR.Types as XT
 
 
 foreign import toString
-    """function toString(a){                
-        console.log('toString:', a);     
-        return a.toString();             
+    """function toString(a){
+        console.log('toString:', a);
+        return a.toString();
     } """ :: forall a. a -> String
 
 foreign import readInt
@@ -43,10 +43,10 @@ foreign import isNumeric
 
 
 foreign import scrollToTop
-    """function scrollToTop() {             
-           console.log('scroll to top'); 
-           window.scroll(0,0);           
-           return undefined;             
+    """function scrollToTop() {
+           console.log('scroll to top');
+           window.scroll(0,0);
+           return undefined;
     }""" :: forall eff. (Eff (dom :: DOM | eff) Unit)
 
 foreign import jsonStringify
@@ -345,3 +345,14 @@ foreign import stopPropagation
     """
     function stopPropagation(e) { return function() {e.stopPropagation(); e.preventDefault(); } }
     """ :: forall a b. a -> Eff ( | b) Unit
+
+foreign import stringReplace
+    """
+    function stringReplace(src){
+        return function(pattern) {
+            return function(replacement){
+                return src.replace(pattern, replacement)
+            }
+        }
+    }
+    """ :: String -> String -> String -> String

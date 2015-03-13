@@ -68,6 +68,7 @@ listenUserInfoKeys state = do
 
     (filterRx ((==) Escape) keyCodesS) ~> \_ -> hideUserInfo state
 
+avatarUrl src = stringReplace src "_normal." "_400x400."
 
 instance asHtmlUser :: AsHtml User where
     asHtml s (User u) = D.ul { style: { display: "block"
@@ -76,12 +77,24 @@ instance asHtmlUser :: AsHtml User where
                                        , margin: "auto"
                                        , "overflow": "auto"
                                        , padding: "20px"
+                                       --, color: "#" ++ u.userProfileTextColor
+                                       , "background-color": "rgba(0,0,0,0.3)"
                                        , height: "100%" } }
-        [ D.li {style: { margin: "0px", padding: "5px" }} [D.span {style: {"font-size": "200%"}} [D.rawText u.userName]]
-        , D.li {style: { margin: "0px", padding: "5px" }} [D.span {} [D.rawText $ "@" ++ u.userScreenName]]
+        [ D.li {style: { margin: "0px", padding: "5px" }}
+              [D.span {style: {"font-size": "200%"}}
+                  [ D.rawText u.userName
+                  , if u.userVerified then (D.span {style: {color: "blue"}} [D.rawText " •"])
+                                      else (D.rawText "")
+                  , if u.userProtected then (D.span {style: {color: "red"}} [D.rawText " •"])
+                                       else (D.rawText "") ]]
+        , D.li {style: { margin: "0px", padding: "5px" }}
+              [D.a { href: "https://twitter.com/" ++ u.userScreenName
+                   , style: {color: "lightgrey"}
+                   , target: "_blank"} [D.rawText $ "@" ++ u.userScreenName]]
         , D.li {style: { margin: "0px", padding: "5px" }} [case u.userProfileImageURL of
                       Nothing -> D.rawText ""
-                      Just url -> D.img {src: url} []]
+                      Just url -> D.img { src: avatarUrl url
+                                        , style: {width: "100px"}} []]
         , D.li {style: { margin: "0px", padding: "5px" }} [case u.userDescription of
                       Nothing -> D.rawText ""
                       Just desc -> D.rawText desc]
@@ -123,7 +136,21 @@ userInfo = createClass spec { displayName = "Messages", render = renderFun } whe
                          , position: "fixed"
                          , top: "50%"
                          , "overflow": "hidden"
-                         , "background-color": "rgba(0,0,0,0.95)"
+                         , "background-color": case mbUser of
+                                                  Nothing -> "rgba(0,0,0,0.95)"
+                                                  Just (User u) -> case u.userProfileBackgroundColor of
+                                                    Nothing -> "rgba(0,0,0,0.95)"
+                                                    Just c -> "#" ++ c
+                          , "background-image": case mbUser of
+                                                  Nothing -> "none"
+                                                  Just (User u) -> case u.userProfileBannerURL of
+                                                      Nothing -> "none"
+                                                      Just src -> "url("++src++")"
+                          , "background-size": case mbUser of
+                                                  Nothing -> "auto"
+                                                  Just (User u) -> case u.userProfileBannerURL of
+                                                      Nothing -> "auto"
+                                                      Just src -> "cover"
                          , color: "white"
                          , transform: "translateY(-240px)"
                          } } [
