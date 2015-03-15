@@ -5,11 +5,13 @@ dist/**
 src/UI/HTTP/cs/bower_components**
 src/UI/HTTP/cs/node_modules**
 src/UI/HTTP/cs/.psci_modules**
-
+src/UI/HTTP/cs/res/*.js
 
 /.dist-buildwrapper/
-myDatabase/**
+twic.db/**
 SourceGraph/**
 
 
 .project
+twic.log
+
