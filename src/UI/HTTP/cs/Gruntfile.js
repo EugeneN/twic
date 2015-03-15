@@ -17,9 +17,9 @@ module.exports = function(grunt) {
                 , "bower_components/rxjs/dist/rx.all.js"
                 , "bower_components/rxjs-jquery/rx.jquery.js"
                 , "bower_components/react/react.js"
-                , "../../../../dist/cs/App.js"
+                , "./res/App.js"
               ],
-              dest:  "../../../../dist/cs/Main.js"
+              dest:  "./res/Main.js"
           }
           , cjs: {
               src: [
@@ -27,9 +27,9 @@ module.exports = function(grunt) {
                   , "bower_components/rxjs/dist/rx.all.js"
                   , "bower_components/rxjs-jquery/rx.jquery.js"
                   , "bower_components/react/react.js"
-                  , "../../../../dist/cs/cjs/**.js"
+                  , "./res/cjs/**.js"
               ],
-              dest:  "../../../../dist/cs/cjs/CJSMain.js"
+              dest:  "./res/cjs/CJSMain.js"
           }
       }
 
@@ -40,11 +40,11 @@ module.exports = function(grunt) {
           }
         , all: {
               src: ["<%=srcFiles%>"]
-            , dest: "../../../../dist/cs/App.js"
+            , dest: "./res/App.js"
           }
         , just: {
               src: ["<%=justSrcFiles%>"]
-            , dest: "../../../../dist/cs/justApp.js"
+            , dest: "./res/justApp.js"
           }
       }
 
@@ -55,11 +55,11 @@ module.exports = function(grunt) {
         }
       , all: {
           src: ["<%=srcFiles%>"]
-        , dest: "../../../../dist/cs/cjs/"
+        , dest: "./res/cjs/"
       }
       , just: {
           src: ["<%=justSrcFiles%>"]
-          , dest: "../../../../dist/cs/cjsJustApp.js"
+          , dest: "./res/cjsJustApp.js"
       }
     }
   });

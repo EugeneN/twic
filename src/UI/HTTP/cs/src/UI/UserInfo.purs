@@ -1,7 +1,9 @@
 module UI.UserInfo where
 
 import Data.Maybe
-import Control.Monad.Eff (Eff(..))
+import Control.Monad.Eff
+import Control.Monad.Eff.Unsafe
+import Control.Monad.Eff
 import DOM (DOM(..))
 import qualified React.DOM as D
 import React (createClass, renderComponentById, spec)
@@ -39,6 +41,7 @@ loadUserInfo state author@(Author {screen_name=sn}) = do
           enableHistoryButton state
           s <- readState state
           writeState state (s # userInfoL .~ (UserInfo { visible: true
+                                                       , followRequestActive: false
                                                        , userdata: Just userinfo }))
 
       -- TODO handle other cases
@@ -68,6 +71,63 @@ listenUserInfoKeys state = do
 
     (filterRx ((==) Escape) keyCodesS) ~> \_ -> hideUserInfo state
 
+getFollowUrl sn = "/follow?sn=" ++ sn
+getUnfollowUrl sn = "/unfollow?sn=" ++ sn
+
+handleFollow state sn ev = do
+  stopPropagation ev
+  handleFollowUnfollow state (getFollowUrl sn)
+  pure unit
+
+handleUnfollow state sn ev = do
+  stopPropagation ev
+  handleFollowUnfollow state (getUnfollowUrl sn)
+  pure unit
+
+handleFollowUnfollow state url = do
+  disableHistoryButton state
+  s <- readState state
+  writeState state (s # userInfoL .~ (UserInfo { visible: true
+                                               , followRequestActive: true
+                                               , userdata: ((s ^. userInfoL) ^. userInfoUserdataL) }))
+  (rioGet url) ~> handler
+  pure unit
+
+  where
+  handler s = case (fromResponse s) of
+      ResponseError {errTitle = t, errMessage = m} -> do
+          enableHistoryButton state
+          setMessage state $ errorM m
+
+      ResponseUserinfo {uiTitle = t, uiData = userinfo} -> do
+          enableHistoryButton state
+          --setMessage state $ successM m
+
+          s <- readState state
+          writeState state (s # userInfoL .~ (UserInfo { visible: true
+                                                       , followRequestActive: false
+                                                       , userdata: Just userinfo }))
+
+runEff action = runPure (unsafeInterleaveEff action)
+
+followButton state user = do
+  State {userInfo = (UserInfo {followRequestActive = fra})} <- readState state
+  pure $ if not fra
+    then D.button { style: {"margin-left": "8px"}
+                           , onClick: callEventHandler $ handleFollow state user.userScreenName }
+                  [D.rawText "Follow"]
+    else D.img { src: "/snake-loader.gif"
+               , style: {margin: "1px 10px 1px 10px"} } []
+
+unfollowButton state user = do
+  State {userInfo = (UserInfo {followRequestActive = fra})} <- readState state
+  pure $ if not fra
+    then D.button { style: {"margin-left": "8px"}
+                           , onClick: callEventHandler $ handleUnfollow state user.userScreenName }
+                  [D.rawText "Unfollow"]
+    else D.img { src: "/snake-loader.gif"
+               , style: {margin: "1px 10px 1px 10px"} } []
+
 avatarUrl src = stringReplace src "_normal." "_400x400."
 
 instance asHtmlUser :: AsHtml User where
@@ -92,34 +152,37 @@ instance asHtmlUser :: AsHtml User where
                    , style: {color: "lightgrey"}
                    , target: "_blank"} [D.rawText $ "@" ++ u.userScreenName]]
         , D.li {style: { margin: "0px", padding: "5px" }} [case u.userProfileImageURL of
-                      Nothing -> D.rawText ""
-                      Just url -> D.img { src: avatarUrl url
-                                        , style: {width: "100px"}} []]
+            Nothing -> D.rawText ""
+            Just url -> D.img { src: avatarUrl url
+                              , style: {width: "100px"}} []]
         , D.li {style: { margin: "0px", padding: "5px" }} [case u.userDescription of
-                      Nothing -> D.rawText ""
-                      Just desc -> D.rawText desc]
+            Nothing -> D.rawText ""
+            Just desc -> D.rawText desc]
         , D.li {style: { margin: "0px", padding: "5px" }} [case u.userURL of
-                      Nothing -> D.rawText ""
-                      Just url -> D.a { style: { color: "white"
-                                               , "text-decoration": "underline"}
-                                      , href: url
-                                      , target: "_blank"} [D.rawText url]]
+            Nothing -> D.rawText ""
+            Just url -> D.a { style: { color: "white"
+                                     , "text-decoration": "underline"}
+                            , href: url
+                            , target: "_blank"} [D.rawText url]]
         , D.li {style: { margin: "0px", padding: "5px" }} [case u.userLocation of
-                      Nothing -> D.rawText ""
-                      Just loc -> D.rawText loc]
+            Nothing -> D.rawText ""
+            Just loc -> D.rawText loc]
         , D.li {style: { margin: "0px", padding: "5px" }} [case u.userTimeZone of
-                      Nothing -> D.rawText ""
-                      Just tz -> D.rawText $ tz ++ " timezone"]
+            Nothing -> D.rawText ""
+            Just tz -> D.rawText $ tz ++ " timezone"]
         , D.li {style: { margin: "0px", padding: "5px" }} [D.rawText $ "Registered on " ++ u.userCreatedAt]
-        , D.li {style: { margin: "0px", padding: "5px" }} [D.rawText $ show u.userFollowersCount ++ " followers, " ++
-                               show u.userFriendsCount ++ " friends, " ++
-                               show u.userStatusesCount ++ " tweets" ]
+        , D.li {style: { margin: "0px", padding: "5px" }} [
+            D.rawText $ show u.userFollowersCount ++ " followers, " ++
+                        show u.userFriendsCount ++ " friends, " ++
+                        show u.userStatusesCount ++ " tweets" ]
         , D.li {style: { margin: "0px", padding: "5px" }} [case u.userFollowing of
-                      Nothing -> D.rawText ""
-                      Just fol -> D.rawText $ if fol then "Already following"
-                                                     else "Not following"]
+            Nothing -> D.rawText "Following status unknown"
+            Just fol -> if fol
+              then D.span {} [ D.rawText "Already following"
+                             , (runEff $ unfollowButton s u) ]
+              else D.span {} [ D.rawText "Not following"
+                             , (runEff $ followButton s u) ]]
         ]
-
 
 userInfo :: ComponentClass { state :: RefVal State } {}
 userInfo = createClass spec { displayName = "Messages", render = renderFun } where
@@ -130,6 +193,7 @@ userInfo = createClass spec { displayName = "Messages", render = renderFun } whe
       pure $
           D.div { className: "user-info"
                 , onContextMenu: callEventHandler stopPropagation
+                , onClick: callEventHandler stopPropagation
                 , style: { display: if visible then "block" else "none"
                          , height: "440px"
                          , width: "100%"
@@ -161,10 +225,10 @@ userInfo = createClass spec { displayName = "Messages", render = renderFun } whe
                                                   , top: "200px" } } []
                         Just user -> asHtml this.props.state user
 
-                  , D.button { className: "writer-button nok"
-                              , style: { position: "absolute"
-                                       , top: "31px"
-                                       , transform: "translateX(240px)"
-                                       }
-                              , onClick: hideUserInfo this.props.state } [D.rawText "⨯"]
+                  --, D.button { className: "writer-button nok"
+                  --            , style: { position: "absolute"
+                  --                     , top: "31px"
+                  --                     , transform: "translateX(240px)"
+                  --                     }
+                  --            , onClick: hideUserInfo this.props.state } [D.rawText "⨯"]
                   ]

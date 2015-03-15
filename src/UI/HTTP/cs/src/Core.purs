@@ -76,7 +76,7 @@ instance isForeignUser :: IsForeign User where
          userVerified                         <- readProp "verified" rawObj
          userWithheldInCountries              <- runNullOrUndefined <$> readProp "withheld_in_countries" rawObj
          userWithheldScope                    <- runNullOrUndefined <$> readProp "withheld_scope" rawObj
-         
+
          return $ User  { userContributorsEnabled              : userContributorsEnabled
                         , userCreatedAt                        : userCreatedAt
                         , userDefaultProfile                   : userDefaultProfile
@@ -290,6 +290,7 @@ initialState = State { feed: AFeed { oldFeed: OldFeed []
                      , extraFeed: Nothing
                      , historyButtonDisabled: false
                      , userInfo: UserInfo { visible: false
+                                          , followRequestActive: false
                                           , userdata: Nothing }
                      , writeInput: WriteInput { visible: false
                                               , disabled: false

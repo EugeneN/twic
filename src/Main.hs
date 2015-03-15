@@ -35,6 +35,7 @@ import qualified Control.Exception         as E
 import           Data.Time.Clock           (diffUTCTime, getCurrentTime)
 import           System.Exit
 import           System.Posix.Signals
+import           System.Process
 
 logRealm = "Main"
 
@@ -110,6 +111,8 @@ handleAction "serve" rs = do
     swid <- streamWorker db fv
 
     _ <- swapMVar rs (RunState st db (Just twid) (Just swid) (Just hwid) (Just uwid) fv av uv)
+
+    rc <- system "open http://localhost:3000"
 
     runManager rs
 

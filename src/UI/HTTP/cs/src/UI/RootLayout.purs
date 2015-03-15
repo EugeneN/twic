@@ -10,9 +10,9 @@ import React.Types ( Component() , ComponentClass() , Event() , React()
 
 import UI.Feed (tweetsList, checkButton, historyButton, tweetMenu)
 import UI.Messages (errorsList)
-import UI.TweetWriter (writeInputComponent, showWriteInput)
+import UI.TweetWriter (writeInputComponent, showWriteInput, hideWriteInput)
 import UI.FeedMetadata (feedMetadata)
-import UI.UserInfo (userInfo)
+import UI.UserInfo (userInfo, hideUserInfo)
 import Types
 import Core
 import Utils
@@ -22,6 +22,11 @@ contextMenuHandler state ev = do
     stopPropagation ev
     resetContextMenu state
     showWriteInput state
+
+resetMenus state = do
+  resetContextMenu state
+  hideUserInfo state
+  hideWriteInput state
 
 rootLayout :: ComponentClass { state :: RefVal State } {}
 rootLayout =
@@ -36,7 +41,7 @@ rootLayout =
       pure $
         D.div { className: "root-layout"
               , onContextMenu: (callEventHandler $ contextMenuHandler this.props.state)
-              , onClick: (resetContextMenu this.props.state) } [
+              , onClick: (resetMenus this.props.state) } [
             D.div { className:  "error" , id: "messages" } [
               (errorsList {state: this.props.state} [])]
 

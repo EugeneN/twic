@@ -25,6 +25,8 @@ module BL.Core (
   , readUserstream
   , readUserInfo
   , retweetUrl
+  , followUser
+  , unfollowUser
   , getRunTime
   , tweetUrl
   , replyUrl
@@ -402,6 +404,27 @@ readUserInfo sn = withManager $ \mgr -> do
     tokens :: OAuth
     tokens = twitterOAuth { oauthConsumerKey = BS.pack CFG.oauthConsumerKey
                           , oauthConsumerSecret = BS.pack CFG.oauthConsumerSecret }
+
+followUser sn = followUnfollowUser sn (friendshipsCreate (ScreenNameParam sn))
+unfollowUser sn = followUnfollowUser sn (friendshipsDestroy (ScreenNameParam sn))
+
+followUnfollowUser sn req = withManager $ \mgr -> do
+    _ <- call twInfo mgr req
+    res <- call twInfo mgr $ usersShow (ScreenNameParam sn)
+    return res -- res :: MonadResource User
+
+    where
+    twInfo :: TWInfo
+    twInfo = setCredential tokens credential def
+
+    credential :: Credential
+    credential = Credential [ ("oauth_token", BS.pack CFG.accessToken)
+                            , ("oauth_token_secret", BS.pack CFG.accessTokenSecret) ]
+
+    tokens :: OAuth
+    tokens = twitterOAuth { oauthConsumerKey = BS.pack CFG.oauthConsumerKey
+                          , oauthConsumerSecret = BS.pack CFG.oauthConsumerSecret }
+
 
 readHistory :: TweetId -> Int -> IO (Either (ApiError HttpException) [Tweet])
 readHistory maxid count = do

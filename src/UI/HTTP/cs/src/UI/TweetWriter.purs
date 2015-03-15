@@ -142,6 +142,7 @@ writeInputComponent = createClass spec { displayName = "writeInputComponent", re
           D.div { className: "write-tweet"
                 , disabled: disabled
                 , onContextMenu: callEventHandler stopPropagation
+                , onClick: callEventHandler stopPropagation
                 , style: { display: if visible then "block" else "none"
                          , height: case reply of
                                       Nothing -> "50px"

@@ -1,9 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module UI.HTTP.App where
 
 import           BL.Core                             (getStatus, readHistory,
-                                                      readUserInfo,
+                                                      readUserInfo, followUser, unfollowUser,
                                                       readUserstream, replyUrl,
                                                       retweetUrl, saveLastSeen,
                                                       saveLastSeenAsync,
@@ -62,7 +63,7 @@ import           UI.HTTP.Json                        (justTweetsToJson,
 
 import           Blaze.ByteString.Builder.ByteString (fromByteString)
 import           Data.Time.Clock                     (UTCTime (..))
-
+import           Data.FileEmbed                      (embedFile)
 
 
 logRealm = "HttpApp"
@@ -83,6 +84,21 @@ mimeText = ("Content-Type", "text/plain")
 mimeJs   = ("Content-Type", "text/javascript")
 mimeJSON = ("Content-Type", "application/json")
 mimeIco  = ("Content-Type", "image/x-icon")
+mimeGif  = ("Content-Type", "image/gif")
+
+
+resMainjs     = $(embedFile "src/UI/HTTP/cs/res/Main.js")
+resFavicon    = $(embedFile "src/UI/HTTP/cs/res/favicon.ico")
+resLoader     = $(embedFile "src/UI/HTTP/cs/res/snake-loader.gif")
+resLoaderDark = $(embedFile "src/UI/HTTP/cs/res/snake-loader-darkbg.gif")
+
+--embeddedHandler :: Application
+embeddedHandler mime resourse request response =
+  response $ responseLBS status200 mime bstr
+
+  where
+  bstr = BSL.fromStrict resourse
+
 
 httpapp :: UTCTime -> MyDb -> Application -- = Request -> ResourceT IO Response
 httpapp st db request sendResponse = do
@@ -90,10 +106,15 @@ httpapp st db request sendResponse = do
   case pathInfo request of
     []                  -> homeHandler request sendResponse
 
-    ["cs", "Main.js"]   -> staticHandler [mimeJs] "dist/cs/Main.js" request sendResponse
-    ["favicon.ico"]     -> staticHandler [mimeIco] "res/favicon.ico" request sendResponse
-    ["snake-loader.gif"] -> staticHandler [mimeIco] "res/snake-loader.gif" request sendResponse
-    ["snake-loader-darkbg.gif"] -> staticHandler [mimeIco] "res/snake-loader-darkbg.gif" request sendResponse
+    --["cs", "Main.js"]    -> embeddedHandler [mimeJs] resMainjs request sendResponse
+    --["favicon.ico"]      -> embeddedHandler [mimeIco] resFavicon request sendResponse
+    --["snake-loader.gif"] -> embeddedHandler [mimeGif] resLoader request sendResponse
+    --["snake-loader-darkbg.gif"] -> embeddedHandler [mimeGif] resLoaderDark request sendResponse
+
+    ["cs", "Main.js"]   -> staticHandler [mimeJs] "src/UI/HTTP/cs/res/Main.js" request sendResponse
+    ["favicon.ico"]     -> staticHandler [mimeIco] "src/UI/HTTP/cs/res/favicon.ico" request sendResponse
+    ["snake-loader.gif"] -> staticHandler [mimeGif] "src/UI/HTTP/cs/res/snake-loader.gif" request sendResponse
+    ["snake-loader-darkbg.gif"] -> staticHandler [mimeGif] "src/UI/HTTP/cs/res/snake-loader-darkbg.gif" request sendResponse
 
     path                -> case Prelude.head path of
         "retweet"       -> retweetHandler request sendResponse
@@ -104,6 +125,8 @@ httpapp st db request sendResponse = do
         "history"       -> historyHandler request sendResponse
         "userfeed"      -> userfeedHandler request sendResponse
         "userinfo"      -> userinfoHandler request sendResponse
+        "follow"        -> followHandler True request sendResponse
+        "unfollow"      -> followHandler False request sendResponse
         _               -> notFoundHandler request sendResponse
 
 makeClient :: UUID -> WS.Connection -> Client
@@ -277,6 +300,19 @@ userinfoHandler request response = case queryString request of
         userinfoStream :: ScreenName -> (Builder -> IO ()) -> IO () -> IO ()
         userinfoStream sn send flush =
             readUserInfo (T.unpack sn) >>= send . justUserToJson >> flush
+
+followHandler :: Bool -> Application
+followHandler follow request response = case queryString request of
+    [("sn", Just screenName)] ->
+        response $ responseStream status200 [mimeJSON] (followStream (decodeUtf8 screenName))
+
+    _ -> response $ responseLBS status200 [mimeJSON] "bad request"
+
+    where
+        followStream :: ScreenName -> (Builder -> IO ()) -> IO () -> IO ()
+        followStream sn send flush = if follow
+            then followUser (T.unpack sn) >>= send . justUserToJson >> flush
+            else unfollowUser (T.unpack sn) >>= send . justUserToJson >> flush
 
 tweetHandler :: Application
 tweetHandler request response = case queryString request of

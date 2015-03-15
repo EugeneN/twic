@@ -254,6 +254,7 @@ startWsClient state = do
         pure unit
 
 handleRetweetClick state id_ = do
+    resetContextMenu state
     let url = "/retweet/?id=" ++ id_
     disableHistoryButton state
     (rioPost url Nothing) ~> retweetResultHandler
@@ -267,6 +268,7 @@ handleRetweetClick state id_ = do
         pure unit
 
 handleStarClick state id_ = do
+    resetContextMenu state
     let url = "/star?id=" ++ id_
     disableHistoryButton state
     (rioPost url Nothing) ~> starResultHandler
@@ -281,6 +283,7 @@ handleStarClick state id_ = do
 
 handleAuthorContextMenu state author@(Author {screen_name=sn}) ev = do
   stopPropagation ev
+  resetContextMenu state
   loadUserInfo state author
 
 getTweetById :: forall eff. RefVal State
@@ -298,6 +301,7 @@ getTweetById state tid = do
         x:xs  -> Just x
 
 handleReplyClick state id_ = do
+    resetContextMenu state
     x <- getTweetById state id_
     case x of
         Nothing    -> setMessage state (errorM $ "Cant't find tweet with id=" ++ id_)
@@ -457,6 +461,8 @@ tweetMenu = createClass spec { displayName = "TweetMenu", render = renderFun }
 
       pure $ case maybeTid of
         Just tid -> D.span { className: "toolbar-target"
+                           , onContextMenu: callEventHandler stopPropagation
+                           , onClick: callEventHandler stopPropagation
                            , style: { display: if visible then "block" else "none"
                                     , position: "absolute"
                                     , left: x

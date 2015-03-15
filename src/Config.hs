@@ -18,7 +18,7 @@ heartbeatDelay = 15 :: Int -- seconds
 timeoutThreshod = 90
 timeoutWorkerDelay = (timeoutThreshod * oneSecond) - oneSecond
 
-updateRetryCount = 3 :: Int
+updateRetryCount = 30 :: Int
 updateRetryDelay = 2 * oneSecond
 updateFeedAsync = False
 

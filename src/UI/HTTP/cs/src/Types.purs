@@ -48,6 +48,7 @@ data WriteInput = WriteInput { visible  :: Boolean
                              , replyTo  :: Maybe Tweet }
 
 data UserInfo = UserInfo { visible :: Boolean
+                         , followRequestActive :: Boolean
                          , userdata :: Maybe User }
 
 data AFeed = AFeed { oldFeed     :: OldFeed
