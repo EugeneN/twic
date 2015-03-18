@@ -103,7 +103,7 @@ handleSubmitTweet state reply = do
                     ResponseError {errTitle = t, errMessage = m} -> do
                         setMessage state $ errorM m
 
-                    ResponseSuccess {okTitle = _, okTweets = _} -> do
+                    ResponseSuccess {okTitle = _, okFeedMessages = _} -> do
                         case reply of
                             Nothing -> setMessage state (successM "Tweeted :-)")
                             Just _  -> setMessage state (successM "Replied :-)")
@@ -144,6 +144,7 @@ writeInputComponent = createClass spec { displayName = "writeInputComponent", re
                 , onContextMenu: callEventHandler stopPropagation
                 , onClick: callEventHandler stopPropagation
                 , style: { display: if visible then "block" else "none"
+                         , "box-shadow": "rgb(169, 169, 169) 0px 10px 50px"
                          , height: case reply of
                                       Nothing -> "50px"
                                       Just _  -> "100px"

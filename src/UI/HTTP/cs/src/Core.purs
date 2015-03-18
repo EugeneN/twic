@@ -20,6 +20,7 @@ import Data.Monoid
 import Data.Maybe
 import Optic.Core
 import Control.Monad.Eff.Ref
+import Data.Array (filter)
 
 import Utils
 import Types
@@ -159,15 +160,26 @@ instance isForeignTweet :: IsForeign Tweet where
                        , retweet: r
                        }
 
+readFeedMessage x | readProp "tag" x == Right "TweetMessage" = do
+    y <- readProp "contents" x
+    return $ TweetMessage y
+
+readFeedMessage x | readProp "tag" x == Right "UserMessage" = do
+    y <- readProp "contents" x
+    return $ UserMessage y
+
+instance isForeignFeedMessage :: IsForeign FeedMessage where
+    read = readFeedMessage
+
 readX data_ | hasOwnProperty "errTitle" data_ = do
     m <- readProp "errMessage" data_
     t <- readProp "errTitle" data_
     return $ ResponseError {errTitle: t, errMessage: m}
 
 readX data_ | hasOwnProperty "okTitle" data_ = do
-    ts <- readProp "okTweets" data_
+    ts <- readProp "okFeedMessages" data_
     t  <- readProp "okTitle" data_
-    return $ ResponseSuccess {okTitle: t, okTweets: ts}
+    return $ ResponseSuccess {okTitle: t, okFeedMessages: ts}
 
 readX data_ | hasOwnProperty "toTitle" data_ = do
     m <- readProp "toMessage" data_
@@ -180,7 +192,7 @@ readX data_ | hasOwnProperty "uiTitle" data_ = do
     return $ ResponseUserinfo {uiTitle: t, uiData: d}
 
 readX data_ | otherwise = return $ ResponseError { errTitle: "Other error"
-                                                 , errMessage: "Can't parse response 1" }
+                                                 , errMessage: "Can't parse ApiResponse response" }
 
 instance isForeignResponseError :: IsForeign ApiResponse where
   read = readX
@@ -258,19 +270,27 @@ instance isForeignMediaSizes :: IsForeign EntityMediaSizes where
 instance showResponse :: Show X.Response where
     show = toString
 
+justTweets :: [FeedMessage] -> [Tweet]
+justTweets xs = (\(TweetMessage t) -> t) <$> filter justTweetMessage xs
+
+justTweetMessage :: FeedMessage -> Boolean
+justTweetMessage (TweetMessage _) = true
+justTweetMessage _                = false
+
+justUsers :: [FeedMessage] -> [User]
+justUsers xs = (\(UserMessage t) -> t) <$> filter justUserMessage xs
+
+justUserMessage :: FeedMessage -> Boolean
+justUserMessage (UserMessage _) = true
+justUserMessage _               = false
+
 fromResponse :: String -> ApiResponse
 fromResponse x = case (readJSON x :: F ApiResponse) of
   Left err -> ResponseError {errTitle: "Other error", errMessage: ("Can't parse response: " ++ toString err)}
   Right resp -> resp
 
-
-fromCheckResponse :: String -> CheckResponse
-fromCheckResponse x = case (readJSON x :: F CheckResponse) of
-    Left err -> CheckResponse { unreadTitle: "Check failed", unreadCount: -1 }
-    Right resp -> resp
-
-fromWsMessage :: String -> [Tweet]
-fromWsMessage s = case (readJSON s :: F [Tweet]) of
+fromWsMessage :: String -> [FeedMessage]
+fromWsMessage s = case (readJSON s :: F [FeedMessage]) of
     Left err -> []
     Right ts -> ts
 
@@ -292,15 +312,40 @@ initialState = State { feed: AFeed { oldFeed: OldFeed []
                      , userInfo: UserInfo { visible: false
                                           , followRequestActive: false
                                           , userdata: Nothing }
+                     , myInfo: MyInfo { visible: false
+                                      , friends: []
+                                      , userInfo: Nothing }
                      , writeInput: WriteInput { visible: false
                                               , disabled: false
                                               , value: "~"
                                               , replyTo: Nothing }
+                     , searchInput: SearchInput { visible: false
+                                                , value: "" }
                      , contextMenu: ContextMenu { visible: false
                                                 , x: 0
                                                 , y: 0
                                                 , tweetId: Nothing }
                      , errors: [] }
+
+searchInputVisibleL :: LensP SearchInput Boolean
+searchInputVisibleL = lens (\(SearchInput x) -> x.visible)
+                           (\(SearchInput x) v -> SearchInput (x { visible = v }))
+
+searchInputValueL :: LensP SearchInput String
+searchInputValueL = lens (\(SearchInput x) -> x.value)
+                         (\(SearchInput x) v -> SearchInput (x { value = v }))
+
+searchInputL :: LensP State SearchInput
+searchInputL = lens (\(State s) -> s.searchInput)
+                   (\(State s) wi -> State (s { searchInput = wi }))
+
+myInfoL :: LensP State MyInfo
+myInfoL = lens (\(State s) -> s.myInfo)
+               (\(State s) my -> State (s { myInfo = my }))
+               
+myInfoVisibleL :: LensP MyInfo Boolean
+myInfoVisibleL = lens (\(MyInfo x) -> x.visible)
+                      (\(MyInfo x) v -> MyInfo (x { visible = v }))
 
 userInfoL :: LensP State UserInfo
 userInfoL = lens (\(State s) -> s.userInfo)

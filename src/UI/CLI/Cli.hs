@@ -6,6 +6,7 @@ module UI.CLI.Cli (
   ) where
 
 import           BL.Core            (Author (..), Tweet (..), Username)
+import           BL.Types
 import           Control.Monad      (forever, mapM_)
 import           Data.Text          (unpack)
 import           System.Environment (getArgs)
@@ -35,7 +36,7 @@ parseArgs = do
     _ -> return Nothing
 
 
-cliClientWorker :: MVar [Tweet] -> IO ThreadId
+cliClientWorker :: MVar FeedState -> IO ThreadId
 cliClientWorker fv = forkIO $ forever $
     takeMVar fv >>= (print . show)
 

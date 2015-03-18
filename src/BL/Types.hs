@@ -26,16 +26,18 @@ data Message = Message Int
 
 data IPCMessage = MReloadFeed | MExit | MOther | MNOOP deriving Show
 
-instance Show (MVar IPCMessage)
-instance Show (MVar [Tweet])
+data FeedMessage = TweetMessage Tweet | UserMessage User deriving (Show, Generic)
 
-type FeedState = [Tweet]
+instance Show (MVar IPCMessage)
+instance Show (MVar [FeedMessage])
+
+type FeedState = [FeedMessage]
 
 type UpdateMessage = UTCTime
 instance Show (MVar UTCTime)
 
 
-makeAppState :: UTCTime -> a -> Maybe ThreadId -> Maybe ThreadId -> Maybe ThreadId -> Maybe ThreadId -> MVar [Tweet] -> MVar IPCMessage -> MVar UpdateMessage -> AppState a
+makeAppState :: UTCTime -> a -> Maybe ThreadId -> Maybe ThreadId -> Maybe ThreadId -> Maybe ThreadId -> MVar FeedState -> MVar IPCMessage -> MVar UpdateMessage -> AppState a
 makeAppState st db x y z u fv av uv = RunState st db x y z u fv av uv
 
 data AppState a = RunState { startTime       :: UTCTime
@@ -44,7 +46,7 @@ data AppState a = RunState { startTime       :: UTCTime
                            , streamWorkerId  :: Maybe ThreadId
                            , uiWorkerId      :: Maybe ThreadId
                            , updateWorkerId  :: Maybe ThreadId
-                           , feedVar         :: MVar [Tweet]
+                           , feedVar         :: MVar [FeedMessage]
                            , appBusVar       :: MVar IPCMessage
                            , updateVar       :: MVar UpdateMessage
                            } deriving Show
@@ -117,8 +119,8 @@ data JsonApiError = JsonApiError { errTitle   :: Text
                                  , errMessage :: Text
                                  } deriving (Show, Generic)
 
-data JsonResponse = JsonResponse { okTitle  :: Text
-                                 , okTweets :: [Tweet]
+data JsonResponse = JsonResponse { okTitle        :: Text
+                                 , okFeedMessages :: FeedState
                                  } deriving (Show, Generic)
 
 data JsonUserInfo = JsonUserInfo { uiTitle :: Text

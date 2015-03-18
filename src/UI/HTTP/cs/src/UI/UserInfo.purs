@@ -110,37 +110,52 @@ handleFollowUnfollow state url = do
 
 runEff action = runPure (unsafeInterleaveEff action)
 
+followButtonLoaderStyle = { margin: "0px 10px 0px 10px"
+                          , position: "relative"
+                          , top: "4px" }
+
 followButton state user = do
   State {userInfo = (UserInfo {followRequestActive = fra})} <- readState state
   pure $ if not fra
-    then D.button { style: {"margin-left": "8px"}
+    then D.button { style: { "margin-left": "8px"
+                           , "background-color": "#B0E57C"
+                           , "cursor": "pointer"
+                           , "border-radius": "10px"
+                           , "border": "0px solid green" }
                            , onClick: callEventHandler $ handleFollow state user.userScreenName }
                   [D.rawText "Follow"]
     else D.img { src: "/snake-loader.gif"
-               , style: {margin: "1px 10px 1px 10px"} } []
+               , style: followButtonLoaderStyle } []
 
 unfollowButton state user = do
   State {userInfo = (UserInfo {followRequestActive = fra})} <- readState state
   pure $ if not fra
-    then D.button { style: {"margin-left": "8px"}
+    then D.button { style: { "margin-left": "8px"
+                           , "background-color": "#FFAEAE"
+                           , "cursor": "pointer"
+                           , "border-radius": "10px"
+                           , "border": "0px solid red" }
                            , onClick: callEventHandler $ handleUnfollow state user.userScreenName }
                   [D.rawText "Unfollow"]
     else D.img { src: "/snake-loader.gif"
-               , style: {margin: "1px 10px 1px 10px"} } []
+               , style: followButtonLoaderStyle } []
 
 avatarUrl src = stringReplace src "_normal." "_400x400."
 
 instance asHtmlUser :: AsHtml User where
-    asHtml s (User u) = D.ul { style: { display: "block"
-                                       , width: "600px"
+    asHtml s (User u) = D.ul { style: { "display": "block"
+                                       , "width": "600px"
                                        , "text-align": "left"
-                                       , margin: "auto"
-                                       , "overflow": "auto"
-                                       , padding: "20px"
-                                       --, color: "#" ++ u.userProfileTextColor
+                                       , "margin": "auto"
+                                       , "overflow": "hidden"
+                                       , "padding": "20px"
+                                       --, "color": "#" ++ u.userProfileTextColor
                                        , "background-color": "rgba(0,0,0,0.3)"
-                                       , height: "100%" } }
-        [ D.li {style: { margin: "0px", padding: "5px" }}
+                                       , "height": "420px" } }
+        [ D.li {style: { "margin": "0px"
+                       , "padding": "5px"
+                       , "padding-top": "0px"
+                       , "margin-top": "-5px" }}
               [D.span {style: {"font-size": "200%"}}
                   [ D.rawText u.userName
                   , if u.userVerified then (D.span {style: {color: "blue"}} [D.rawText " •"])
@@ -170,7 +185,8 @@ instance asHtmlUser :: AsHtml User where
         , D.li {style: { margin: "0px", padding: "5px" }} [case u.userTimeZone of
             Nothing -> D.rawText ""
             Just tz -> D.rawText $ tz ++ " timezone"]
-        , D.li {style: { margin: "0px", padding: "5px" }} [D.rawText $ "Registered on " ++ u.userCreatedAt]
+        , D.li {style: { margin: "0px", padding: "5px" }} [
+            D.rawText $ "Registered on " ++ u.userCreatedAt]
         , D.li {style: { margin: "0px", padding: "5px" }} [
             D.rawText $ show u.userFollowersCount ++ " followers, " ++
                         show u.userFriendsCount ++ " friends, " ++
@@ -195,28 +211,30 @@ userInfo = createClass spec { displayName = "Messages", render = renderFun } whe
                 , onContextMenu: callEventHandler stopPropagation
                 , onClick: callEventHandler stopPropagation
                 , style: { display: if visible then "block" else "none"
-                         , height: "440px"
+                         , height: "460px"
                          , width: "100%"
                          , position: "fixed"
                          , top: "50%"
                          , "overflow": "hidden"
+                         , "box-shadow": "rgb(169, 169, 169) 0px 10px 50px"
                          , "background-color": case mbUser of
                                                   Nothing -> "rgba(0,0,0,0.95)"
                                                   Just (User u) -> case u.userProfileBackgroundColor of
                                                     Nothing -> "rgba(0,0,0,0.95)"
                                                     Just c -> "#" ++ c
-                          , "background-image": case mbUser of
+                         , "background-image": case mbUser of
                                                   Nothing -> "none"
                                                   Just (User u) -> case u.userProfileBannerURL of
                                                       Nothing -> "none"
                                                       Just src -> "url("++src++")"
-                          , "background-size": case mbUser of
+                         , "background-size": case mbUser of
                                                   Nothing -> "auto"
                                                   Just (User u) -> case u.userProfileBannerURL of
                                                       Nothing -> "auto"
                                                       Just src -> "cover"
                          , color: "white"
                          , transform: "translateY(-240px)"
+                         , "-webkit-transform": "translateY(-240px)"
                          } } [
 
                     case mbUser of

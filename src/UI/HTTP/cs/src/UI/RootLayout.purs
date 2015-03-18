@@ -10,9 +10,11 @@ import React.Types ( Component() , ComponentClass() , Event() , React()
 
 import UI.Feed (tweetsList, checkButton, historyButton, tweetMenu)
 import UI.Messages (errorsList)
-import UI.TweetWriter (writeInputComponent, showWriteInput, hideWriteInput)
+import UI.TweetWriter (writeInputComponent, hideWriteInput)
 import UI.FeedMetadata (feedMetadata)
 import UI.UserInfo (userInfo, hideUserInfo)
+import UI.MyInfo (myInfo)
+import UI.SearchInput (searchInputComponent)
 import Types
 import Core
 import Utils
@@ -21,7 +23,7 @@ import Data.Maybe
 contextMenuHandler state ev = do
     stopPropagation ev
     resetContextMenu state
-    showWriteInput state
+
 
 resetMenus state = do
   resetContextMenu state
@@ -51,8 +53,8 @@ rootLayout =
           , D.div { id: "load-history-container-id" } [
               (historyButton {state: this.props.state} [])]
 
-          , D.div { className:  "container" , id: "container" }
-              [(tweetsList {state: this.props.state} [])]
+          , D.div { className:  "container" , id: "container" } [
+              (tweetsList {state: this.props.state} [])]
 
           , D.div { className:  "refresh" , id: "refresh" } [
               (checkButton {state: this.props.state} []) ]
@@ -65,6 +67,12 @@ rootLayout =
 
           , D.div { id: "userinfo-container-id" } [
               (userInfo {state: this.props.state} [])]
+
+          , D.div { id: "myinfo-container-id" } [
+              (myInfo {state: this.props.state} [])]
+
+          , D.div { id: "searchinput-container-id" } [
+              (searchInputComponent {state: this.props.state} [])]
         ]
 
 renderRootLayout :: forall eff. String

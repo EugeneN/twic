@@ -28,26 +28,38 @@ feedMetadata = createClass spec { displayName = "feedMetadata", render = renderF
         State { extraFeed = maybeEF } <- readState this.props.state
 
         case maybeEF of
-            Just (BFeed { author = a@(Author { name = n
-                                           , screen_name = sn
-                                           , profile_image_url = avatar}) })  -> pure $
-                D.div {className: "feed-meta"} [
-                    D.button { className: "user-icon"
-                             , style: { "border-radius": "50%"
-                                      , "border": "0px"
-                                      , "margin": "20px"
-                                      , "cursor": "pointer"
-                                      , "margin-right": "5px" }
-                             , onClick: handleBack this.props.state } [D.rawText "←"]
+            Just (BFeed { author = mbAuthor })  -> case mbAuthor of
+                Nothing ->pure $
+                    D.div {className: "feed-meta"} [
+                        D.button { className: "user-icon"
+                                 , style: { "border-radius": "50%"
+                                          , "border": "0px"
+                                          , "margin": "20px"
+                                          , "cursor": "pointer"
+                                          , "margin-right": "5px" }
+                                 , onClick: handleBack this.props.state } [D.rawText "←"]
+                        ]
 
-                  , D.span { className: "user-icon"
-                           , style: { "margin": "20px"
-                                    , "margin-left": "5px"
-                                    , "display": "inline-block" } } [
-                        D.a {href: "https://twitter.com/" ++ sn, target: "_blank"} [
-                            D.img { className: "user-icon-img"
-                                  , src: avatar
-                                  , onContextMenu: (callEventHandler $ handleAuthorContextMenu this.props.state a)
-                                  , title: n} [] ] ] ]
+                Just a@(Author { name = n
+                               , screen_name = sn
+                               , profile_image_url = avatar}) -> pure $
+                    D.div {className: "feed-meta"} [
+                        D.button { className: "user-icon"
+                                 , style: { "border-radius": "50%"
+                                          , "border": "0px"
+                                          , "margin": "20px"
+                                          , "cursor": "pointer"
+                                          , "margin-right": "5px" }
+                                 , onClick: handleBack this.props.state } [D.rawText "←"]
+
+                      , D.span { className: "user-icon"
+                               , style: { "margin": "20px"
+                                        , "margin-left": "5px"
+                                        , "display": "inline-block" } } [
+                            D.a {href: "https://twitter.com/" ++ sn, target: "_blank"} [
+                                D.img { className: "user-icon-img"
+                                      , src: avatar
+                                      , onContextMenu: (callEventHandler $ handleAuthorContextMenu this.props.state a)
+                                      , title: n} [] ] ] ]
 
             Nothing -> pure $ D.div {} []

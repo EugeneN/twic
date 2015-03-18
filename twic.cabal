@@ -59,11 +59,13 @@ Executable twic
     , lens-action
     , conduit-extra
     , conduit
-    , twitter-types
+    , twitter-types           >= 0.7.0
     , unordered-containers
     , uuid
     , time
     , hslogger
     , unix
     , containers
+    , file-embed
+    , process
 

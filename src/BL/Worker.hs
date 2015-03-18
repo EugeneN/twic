@@ -35,6 +35,7 @@ import qualified Config                    as CFG
 import           Prelude                   hiding (error)
 import           System.Log.Handler.Simple
 import           System.Log.Logger
+import qualified Web.Twitter.Types         as TT
 
 logRealm = "Worker"
 
@@ -73,35 +74,32 @@ timeoutWorker db ch = forkIO $ forever $ do
 
   sendUpdateMessage ch = putMVar ch MReloadFeed
 
-updateWorker :: MyDb -> MVar [Tweet] -> MVar UpdateMessage -> IO ThreadId
+updateWorker :: MyDb -> MVar FeedState -> MVar UpdateMessage -> IO ThreadId
 updateWorker db fv uv = forkIO $ forever $ do
     ur <- takeMVar uv
     debug $ "***Got an update request at " ++ show ur
     -- TODO throttle update requests here
     BLC.updateFeedSync db fv
 
-streamWorker :: MyDb -> MVar [Tweet] -> IO ThreadId
+streamWorker :: MyDb -> MVar FeedState -> IO ThreadId
 streamWorker db m = forkIO $
   withManager$ \mgr -> do
-    src <- stream twInfo mgr userstream
+    src <- stream BLC.twInfo mgr userstream
     src C.$$+- CL.mapM_ (^! act (liftIO . handleTL))
 
   where
-    twInfo :: TWInfo
-    twInfo = setCredential tokens credential def
+  handleTL :: StreamingAPI -> IO ()
+  handleTL (SStatus s)          = handleTweet $ BLC.statusToTweet s
+  handleTL (SRetweetedStatus s) = handleTweet $ BLC.retweetStatusToTweet s
+  handleTL (SEvent ev)          = handleEvent ev
+  handleTL s = debug $ "???? got not a tweet: " ++ show s
 
-    credential :: Credential
-    credential = Credential [ ("oauth_token", BS.pack CFG.accessToken)
-                            , ("oauth_token_secret", BS.pack CFG.accessTokenSecret) ]
+  handleTweet t = BLC.handleIncomingFeedMessages db m [TweetMessage t]
 
-    tokens :: OAuth
-    tokens = twitterOAuth { oauthConsumerKey = BS.pack CFG.oauthConsumerKey
-                          , oauthConsumerSecret = BS.pack CFG.oauthConsumerSecret }
+  handleEvent ( TT.Event { evCreatedAt = _
+                         , evTargetObject = _
+                         , evEvent = "follow"
+                         , evTarget = (ETUser user)
+                         , evSource = _}) = BLC.handleIncomingFeedMessages db m [UserMessage user]
 
-    handleTL :: StreamingAPI -> IO ()
-    handleTL (SStatus s)          = handleTweet $ BLC.statusToTweet s
-    handleTL (SRetweetedStatus s) = handleTweet $ BLC.retweetStatusToTweet s
-
-    handleTL s = debug $ "???? got not a tweet: " ++ show s
-
-    handleTweet t = BLC.handleIncomingTweets db m [t]
+  handleEvent x = debug $ "???? got unknown event: " ++ show x

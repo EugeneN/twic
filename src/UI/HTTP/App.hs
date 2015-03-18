@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE CPP #-}
 
 module UI.HTTP.App where
 
@@ -50,11 +51,8 @@ import           Prelude                             hiding (error)
 import           System.Log.Handler.Simple
 import           System.Log.Logger
 import           Text.Blaze.Html.Renderer.Utf8       (renderHtmlBuilder)
-import           UI.HTTP.Html                        (homePage,
-                                                      justTweetsToHtml,
-                                                      retweetToHtml,
-                                                      tweetsToHtml)
-import           UI.HTTP.Json                        (justTweetsToJson,
+import           UI.HTTP.Html                        (homePage)
+import           UI.HTTP.Json                        (justFeedMessagesToJson,
                                                       justUnreadCountToJson,
                                                       justUserInfoToJson,
                                                       justUserToJson,
@@ -106,15 +104,17 @@ httpapp st db request sendResponse = do
   case pathInfo request of
     []                  -> homeHandler request sendResponse
 
-    --["cs", "Main.js"]    -> embeddedHandler [mimeJs] resMainjs request sendResponse
-    --["favicon.ico"]      -> embeddedHandler [mimeIco] resFavicon request sendResponse
-    --["snake-loader.gif"] -> embeddedHandler [mimeGif] resLoader request sendResponse
-    --["snake-loader-darkbg.gif"] -> embeddedHandler [mimeGif] resLoaderDark request sendResponse
-
+#ifdef XStaticResources
+    ["cs", "Main.js"]    -> embeddedHandler [mimeJs] resMainjs request sendResponse
+    ["favicon.ico"]      -> embeddedHandler [mimeIco] resFavicon request sendResponse
+    ["snake-loader.gif"] -> embeddedHandler [mimeGif] resLoader request sendResponse
+    ["snake-loader-darkbg.gif"] -> embeddedHandler [mimeGif] resLoaderDark request sendResponse
+#else
     ["cs", "Main.js"]   -> staticHandler [mimeJs] "src/UI/HTTP/cs/res/Main.js" request sendResponse
     ["favicon.ico"]     -> staticHandler [mimeIco] "src/UI/HTTP/cs/res/favicon.ico" request sendResponse
     ["snake-loader.gif"] -> staticHandler [mimeGif] "src/UI/HTTP/cs/res/snake-loader.gif" request sendResponse
     ["snake-loader-darkbg.gif"] -> staticHandler [mimeGif] "src/UI/HTTP/cs/res/snake-loader-darkbg.gif" request sendResponse
+#endif
 
     path                -> case Prelude.head path of
         "retweet"       -> retweetHandler request sendResponse
@@ -138,7 +138,7 @@ addClient client clients = client : clients
 removeClient :: Client -> WSState -> WSState
 removeClient client = Prelude.filter ((/= fst client) . fst)
 
-sendToClients :: MyDb -> MVar [Client] -> [Tweet] -> IO ()
+sendToClients :: MyDb -> MVar [Client] -> FeedState -> IO ()
 sendToClients db cs ts = do
     clients <- readMVar cs
     case clients of
@@ -275,7 +275,7 @@ historyHandler request response = case queryString request of
     where
         historyStream :: TweetId -> (Builder -> IO ()) -> IO () -> IO ()
         historyStream id_ send flush =
-            readHistory id_ 20 >>= send . justTweetsToJson >> flush
+            readHistory id_ 20 >>= send . justFeedMessagesToJson >> flush
 
 userfeedHandler :: Application
 userfeedHandler request response = case queryString request of
@@ -287,7 +287,7 @@ userfeedHandler request response = case queryString request of
     where
         userfeedStream :: ScreenName -> (Builder -> IO ()) -> IO () -> IO ()
         userfeedStream sn send flush =
-            readUserstream sn 200 >>= send . justTweetsToJson >> flush
+            readUserstream sn 200 >>= send . justFeedMessagesToJson >> flush
 
 userinfoHandler :: Application
 userinfoHandler request response = case queryString request of

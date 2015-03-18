@@ -250,7 +250,9 @@ data KeyCode = Insert
              | Escape
              | Enter
              | Delete
+             | F1
              | F2
+             | F3
              | F4
              | F5
              | UnknownKey Number
@@ -260,7 +262,9 @@ keyEventToKeyCode x | which x == 13  = Enter
                     | which x == 27  = Escape
                     | which x == 45  = Insert
                     | which x == 46  = Delete
+                    | which x == 112 = F1
                     | which x == 113 = F2
+                    | which x == 114 = F3
                     | which x == 115 = F4
                     | which x == 116 = F5
 
@@ -271,7 +275,9 @@ instance eqKeyCode :: Eq KeyCode where
     (==) Escape Escape = true
     (==) Enter  Enter  = true
     (==) Delete Delete = true
+    (==) F1     F1     = true
     (==) F2     F2     = true
+    (==) F3     F3     = true
     (==) F4     F4     = true
     (==) F5     F5     = true
     (==) _      _      = false

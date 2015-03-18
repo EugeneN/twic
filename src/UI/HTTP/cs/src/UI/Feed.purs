@@ -24,9 +24,10 @@ import Core
 import Utils
 import Types
 import UI.Types
-import UI.TweetWriter (showReplyInput)
+import UI.TweetWriter (showReplyInput, showWriteInput)
 import Optic.Core ( (.~), (^.))
 import UI.UserInfo (loadUserInfo)
+import UI.SearchInput (showSearchInput)
 
 showNewTweets :: forall eff. RefVal State
                           -> Eff (ref :: Ref, dom :: DOM, react :: React | eff) Unit
@@ -55,13 +56,13 @@ showOldTweets state count = do
         let l = length of_
             splitIdx = if l > count then (l - count) else 0
             chunks = splitAt of_ splitIdx
-        in
-        case chunks of
-            [newOf, historyFd] ->
-                writeState state $ (s # extraFeedL .~ (Just $ BFeed { oldFeed:     OldFeed newOf
-                                                                    , currentFeed: CurrentFeed $ historyFd ++ cf
-                                                                    , newFeed:     nf
-                                                                    , author:      author } ) )
+
+        in case chunks of
+          [newOf, historyFd] ->
+            writeState state $ (s # extraFeedL .~ (Just $ BFeed { oldFeed:     OldFeed newOf
+                                                                , currentFeed: CurrentFeed $ historyFd ++ cf
+                                                                , newFeed:     nf
+                                                                , author:      author } ) )
 
       Nothing -> do
         s@State { feed = AFeed { oldFeed     = (OldFeed of_)
@@ -110,17 +111,33 @@ onHistoryTweets state ts = do
     writeState state newState
 
 onNewTweets :: forall eff. RefVal State
-                        -> [Tweet]
+                        -> [FeedMessage]
                         -> Eff ( trace :: Trace, ref :: Ref | eff ) Unit
 onNewTweets _ [] = do
-    trace "got no tweets"
+    trace "got no messages"
     pure unit
 
 onNewTweets state ts = do
     s <- readState state
     let feed = s ^. feedL
-        newState = s # feedL .~ (feed # newFeedL .~ ((feed ^. newFeedL) ++ NewFeed ts))
-    writeState state newState
+        userInfo = s ^. userInfoL
+        tweets = justTweets ts
+        users  = justUsers ts
+
+    handleNewTweets feed state s tweets
+    handleNewUsers userInfo state s users
+
+    pure unit
+
+    where
+    handleNewTweets feed state s xs = case xs of
+        [] -> pure unit
+        xs -> writeState state (s # feedL .~ (feed # newFeedL .~ ((feed ^. newFeedL) ++ NewFeed xs)))
+
+    handleNewUsers userInfo state s ys = case ys of
+        [] -> pure unit
+        -- TODO check if this works
+        y:_ -> writeState state (s # userInfoL .~ ( (s ^. userInfoL) # userInfoUserdataL .~ (Just y) ) )
 
 getHistoryUrl :: TweetIdS -> Number -> String
 getHistoryUrl maxid count = historyUrl ++ "?maxid=" ++ maxid ++ "&count=" ++ show count
@@ -131,19 +148,19 @@ maybeLoadMoreHistory :: forall eff. RefVal State
                                  -> Eff (trace :: Trace, ref :: Ref, react :: React, dom :: DOM | eff) Unit
 maybeLoadMoreHistory state count tid | count == 0 = do
     disableHistoryButton state
-    (rioGet (getHistoryUrl tid 20)) ~> handleUpdate
+    (rioGet (getHistoryUrl tid 20)) ~> handler
 
     where
-    handleUpdate s = case (fromResponse s) of
+    handler s = case (fromResponse s) of
         ResponseError {errTitle = t, errMessage = m} -> do
             enableHistoryButton state
             onError state t m
             pure unit
 
-        ResponseSuccess {okTitle = t, okTweets = ts} -> do
+        ResponseSuccess {okTitle = t, okFeedMessages = ts} -> do
             enableHistoryButton state
             -- TODO filter out item with id=`tid` from result
-            onHistoryTweets state ts
+            onHistoryTweets state $ justTweets ts
             showOldTweets state 1
             pure unit
 
@@ -152,6 +169,11 @@ maybeLoadMoreHistory _ _ _ = pure unit
 
 
 --------------------------------------------------------------------------------
+
+historyButtonContextMenuHandler state ev = do
+    stopPropagation ev
+    resetContextMenu state
+    showSearchInput state
 
 historyButton :: ComponentClass {state :: RefVal State} {}
 historyButton = createClass spec { displayName = "historyButton", render = renderFun }
@@ -163,12 +185,18 @@ historyButton = createClass spec { displayName = "historyButton", render = rende
             D.button { className: if hbd then "history-button disabled"
                                          else "history-button"
                      , onClick: showOldTweets this.props.state 1
+                     , onContextMenu: (callEventHandler $ historyButtonContextMenuHandler this.props.state)
                      , "disabled": if hbd then "disabled" else ""
                      , id: "load-history-tweets-id"} [ if hbd
                         then (D.img {src: "/snake-loader.gif"} [])
                         else (D.rawText "···")]
 
 --------------------------------------------------------------------------------
+
+checkButtonContextMenuHandler state ev = do
+    stopPropagation ev
+    resetContextMenu state
+    showWriteInput state
 
 checkButton :: ComponentClass {state :: RefVal State} {}
 checkButton = createClass spec { displayName = "CheckButton", render = renderFun }
@@ -182,6 +210,7 @@ checkButton = createClass spec { displayName = "CheckButton", render = renderFun
         D.button { className: if count == 0 then "no-new-tweets pop"
                                             else "there-are-new-tweets pop"
                  , onClick: showNewTweets this.props.state
+                 , onContextMenu: (callEventHandler $ checkButtonContextMenuHandler this.props.state)
                  , id: "load-new-tweets-id"} [D.rawText $ show count]
 
 --------------------------------------------------------------------------------
@@ -355,26 +384,28 @@ loadUserFeed state author@(Author {screen_name = sn}) = do
             onError state t m
             pure unit
 
-        ResponseSuccess {okTitle = t, okTweets = ts} -> do
+        ResponseSuccess {okTitle = t, okFeedMessages = xs} -> do
             enableHistoryButton state
             s <- readState state
+
+            let ts = justTweets xs
 
             case ts of
               x:xs -> writeState state (s # extraFeedL .~ (Just $ BFeed { oldFeed: OldFeed (reverse xs)
                                                                         , currentFeed: CurrentFeed [x]
                                                                         , newFeed: NewFeed []
-                                                                        , author: (getAuthor x) }))
+                                                                        , author: Just (getAuthor x) }))
 
               [x]  -> writeState state (s # extraFeedL .~ (Just $ BFeed { oldFeed: OldFeed []
                                                                         , currentFeed: CurrentFeed [x]
                                                                         , newFeed: NewFeed []
-                                                                        , author: (getAuthor x) }))
+                                                                        , author: Just (getAuthor x) }))
 
               -- XXX how to get Author if we're called by sn and the user has no tweets at all?
               _    -> writeState state (s # extraFeedL .~ (Just $ BFeed { oldFeed: OldFeed []
                                                                         , currentFeed: CurrentFeed []
                                                                         , newFeed: NewFeed []
-                                                                        , author: author }))
+                                                                        , author: Just author }))
 
 --------------------------------------------------------------------------------
 
@@ -570,25 +601,30 @@ tweetsList = createClass spec { displayName = "TweetsList", render = renderFun }
                     x -> (show x) ++ " new tweets"
 
                 case cf of
-                    [] -> pure $ D.ul { id: "feed"
-                                      , onClick: (\ev -> feedClickHandler ev)}
-                                   [D.li { className: "no-tweets" }
-                                     [D.rawText "EOF"]]
+                    [] -> pure $ D.ul {id: "feed" , onClick: (\ev -> feedClickHandler ev)}
+                            [D.li { className: "no-tweets" } [D.rawText "EOF"]]
 
-                    _  -> pure $ D.ul { id: "feed"
-                                      , onClick: (\ev -> feedClickHandler ev)
-                                      } $ (asHtml this.props.state) <$> cf
+                    _  -> pure $ D.ul {id: "feed" , onClick: (\ev -> feedClickHandler ev) }
+                            $ (asHtml this.props.state) <$> cf
 
-            Just (BFeed { author = (Author { screen_name = sn})
+            Just (BFeed { author = mbAuthor
                         , currentFeed = (CurrentFeed cf)
-                        , newFeed = (NewFeed nf) }) -> do
+                        , newFeed = (NewFeed nf) }) -> case mbAuthor of
 
-                setTitle $ sn ++ "'s tweets"
+                Nothing -> do
+                    setTitle "Maybe Search results"
+                    case cf of
+                        [] -> pure $ D.ul {id: "feed" , onClick: (\ev -> feedClickHandler ev)}
+                                [D.li { className: "no-tweets" } [D.rawText "EOF"]]
 
-                case cf of
-                    [] -> pure $ D.ul { id: "feed"
-                                      , onClick: (\ev -> feedClickHandler ev)} [
-                                  D.li { className: "no-tweets" } [D.rawText "EOF"]]
-                    _  -> pure $ D.ul { id: "feed"
-                                      , onClick: (\ev -> feedClickHandler ev)
-                                      } $ (asHtml this.props.state) <$> cf
+                        _  -> pure $ D.ul {id: "feed" , onClick: (\ev -> feedClickHandler ev) }
+                                $ (asHtml this.props.state) <$> cf
+
+                Just (Author {screen_name = sn}) -> do
+                    setTitle $ sn ++ "'s tweets"
+                    case cf of
+                        [] -> pure $ D.ul {id: "feed", onClick: (\ev -> feedClickHandler ev)}
+                                [D.li {className: "no-tweets" } [D.rawText "EOF"]]
+
+                        _  -> pure $ D.ul {id: "feed", onClick: (\ev -> feedClickHandler ev)}
+                                $ (asHtml this.props.state) <$> cf

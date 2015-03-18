@@ -16,7 +16,7 @@ module BL.Core (
   , JsonResponse(..)
   , TweetId
   , retweetStatusToTweet
-  , handleIncomingTweets
+  , handleIncomingFeedMessages
   , statusToTweet
   , saveLastSeen
   , saveLastSeenAsync
@@ -35,6 +35,7 @@ module BL.Core (
   , writeApi
   , readApi
   , starUrl
+  , twInfo
   ) where
 
 import           Data.Text                 (pack, unpack)
@@ -56,6 +57,7 @@ import           Control.Concurrent        (MVar, ThreadId, forkIO, killThread,
 import           Control.Monad
 import           Control.Monad.Trans       (liftIO)
 import           Network.HTTP.Types        (Status (..))
+import qualified Network.HTTP.Types        as HTTP
 
 import qualified BL.CloudDataLayer         as CDL
 import qualified BL.DataLayer              as DL
@@ -87,15 +89,15 @@ warn = warningM logRealm
 debug = debugM logRealm
 error = errorM logRealm
 
-myoauth :: OAuth
-myoauth = newOAuth { oauthServerName     = CFG.serverName
-                   , oauthConsumerKey    = B8.pack CFG.oauthConsumerKey
-                   , oauthConsumerSecret = B8.pack CFG.oauthConsumerSecret
-                   }
+oauthToken :: OAuth
+oauthToken = twitterOAuth { oauthConsumerKey = BS.pack CFG.oauthConsumerKey
+                          , oauthConsumerSecret = BS.pack CFG.oauthConsumerSecret }
 
-mycred :: Credential
-mycred = newCredential (B8.pack CFG.accessToken) (B8.pack CFG.accessTokenSecret)
+oauthCredential :: Credential
+oauthCredential = newCredential (B8.pack CFG.accessToken) (B8.pack CFG.accessTokenSecret)
 
+twInfo :: TWInfo
+twInfo = setCredential oauthToken oauthCredential def
 
 retweetStatusToTweet :: TT.RetweetedStatus -> Tweet
 retweetStatusToTweet s = Tweet (parseTweet $ TT.rsText s)
@@ -122,10 +124,10 @@ statusUserToAuthor s = Author (TT.userName s)
                               (TT.userScreenName s)
                               (TT.userDefaultProfileImage s)
                               (avatarUrl $ TT.userProfileImageURL s)
-    where
-        avatarUrl x = case x of
-            Nothing -> "http://a0.twimg.com/sticky/default_profile_images/default_profile_6_normal.png"
-            Just y -> unpack y
+  where
+  avatarUrl x = case x of
+      Nothing -> "http://a0.twimg.com/sticky/default_profile_images/default_profile_6_normal.png"
+      Just y -> unpack y
 
 
 statusEntitiesToEntities :: Maybe TT.Entities -> BL.Types.Entities
@@ -134,20 +136,20 @@ statusEntitiesToEntities (Just s) = BL.Types.Entities (xUrl <$> TT.enURLs s)
                                                       (xHashtag <$> TT.enHashTags s)
                                                       (Just $ xMedia <$> TT.enMedia s)
   where
-    xUrl (TT.Entity x _) = EntityUrl (unpack $ TT.ueExpanded x) (unpack $ TT.ueURL x) [] (unpack $ TT.ueDisplay x)
-    xHashtag (TT.Entity x _) = EntityHashtag (TT.hashTagText x) []
-    xMedia (TT.Entity x _) = EntityMedia (unpack $ TT.meType x)
-                                         []
-                                         (unpack $ TT.ueExpanded $ TT.meURL x)
-                                         (unpack $ TT.meMediaURL x)
-                                         (unpack $ TT.meMediaURL x)
-                                         (unpack $ TT.meMediaURL x)
-                                         (xSizes $ TT.meSizes x)
-    xSizes x = EntityMediaSizes (xSize $ x ! "thumb" )
-                                (xSize $ x ! "large" )
-                                (xSize $ x ! "medium" )
-                                (xSize $ x ! "small" )
-    xSize x = EntityMediaSize (TT.msHeight x) (TT.msWidth x) (unpack $ TT.msResize x)
+  xUrl (TT.Entity x _) = EntityUrl (unpack $ TT.ueExpanded x) (unpack $ TT.ueURL x) [] (unpack $ TT.ueDisplay x)
+  xHashtag (TT.Entity x _) = EntityHashtag (TT.hashTagText x) []
+  xMedia (TT.Entity x _) = EntityMedia (unpack $ TT.meType x)
+                                       []
+                                       (unpack $ TT.ueExpanded $ TT.meURL x)
+                                       (unpack $ TT.meMediaURL x)
+                                       (unpack $ TT.meMediaURL x)
+                                       (unpack $ TT.meMediaURL x)
+                                       (xSizes $ TT.meSizes x)
+  xSizes x = EntityMediaSizes (xSize $ x ! "thumb" )
+                              (xSize $ x ! "large" )
+                              (xSize $ x ! "medium" )
+                              (xSize $ x ! "small" )
+  xSize x = EntityMediaSize (TT.msHeight x) (TT.msWidth x) (unpack $ TT.msResize x)
 
 statusRetweetToRetweet s = case s of
     Nothing -> Nothing
@@ -181,6 +183,9 @@ instance ToJSON Tweet where
 
 instance FromJSON JsonApiError
 instance ToJSON JsonApiError
+
+instance FromJSON FeedMessage
+instance ToJSON FeedMessage
 
 instance FromJSON JsonResponse
 instance ToJSON JsonResponse
@@ -356,13 +361,20 @@ getUpdateFeedUrl db = do
 
 --------------------------------------------------------------------------------
 
-saveLastSeenAsync :: DL.MyDb -> [Tweet] -> IO ThreadId
+justTweets :: FeedState -> [Tweet]
+justTweets xs = (\(TweetMessage t) -> t) <$> Prelude.filter justTweetMessage xs
+
+justTweetMessage :: FeedMessage -> Bool
+justTweetMessage (TweetMessage _) = True
+justTweetMessage _                = False
+
+saveLastSeenAsync :: DL.MyDb -> FeedState -> IO ThreadId
 saveLastSeenAsync db ts = forkIO $ saveLastSeen db ts >> return ()
 
-saveLastSeen :: DL.MyDb -> [Tweet] -> IO (Either CDL.CloudDataLayerError CDL.WriteResponse)
+saveLastSeen :: DL.MyDb -> FeedState -> IO (Either CDL.CloudDataLayerError CDL.WriteResponse)
 saveLastSeen db ts = do
     now <- getCurrentTime
-    res <- CDL.writeCloudDb $ CDL.CloudDbStoreItem (getMaxId ts) (show now) -- now
+    res <- CDL.writeCloudDb $ CDL.CloudDbStoreItem (getMaxId $ justTweets ts) (show now) -- now
     info $ "Wrote to cloud db with result: " ++ show res
     return res
 
@@ -370,67 +382,59 @@ saveLastSeen db ts = do
     getMaxId :: [Tweet] -> TweetId
     getMaxId ts = maximum (BL.Types.id_ <$> ts)
 
-handleIncomingTweets :: DL.MyDb -> MVar [Tweet] -> [Tweet] -> IO ()
-handleIncomingTweets _ _ [] = do
-    info "Got no updated tweets, skipping saving"
+handleIncomingFeedMessages :: DL.MyDb -> MVar FeedState -> [FeedMessage] -> IO ()
+handleIncomingFeedMessages _ _ [] = do
+    info "Got no updated feed messagess, skipping saving"
     return ()
-handleIncomingTweets _ fv ts = do
-    info $ "Got " ++ show (length ts) ++ " updated tweet/s"
+handleIncomingFeedMessages _ fv ts = do
+    info $ "Got " ++ show (length ts) ++ " updated feed messages/s"
     maybeOldTs <- tryTakeMVar fv
     case maybeOldTs of
         Just oldts -> putMVar fv $ oldts ++ ts
         Nothing    -> putMVar fv ts
 
-readUserstream :: ScreenName -> Int -> IO (Either (ApiError HttpException) [Tweet])
+readUserstream :: ScreenName -> Int -> IO (Either (ApiError HttpException) FeedState)
 readUserstream sn count = do
     info $ "reading userstream where ScreenName=" ++ show sn ++ " and count=" ++ show count
     (_, res) <- readApi $ BL.Core.userTimeline (unpack sn) count
-    return res
-
+    return $ ((TweetMessage <$>) <$> res)
 
 --readuserInfo :: ScreenName -> IO (Either (ApiError HttpException) UserInfo)
 readUserInfo sn = withManager $ \mgr -> do
-    res <- call twInfo mgr $ usersShow (ScreenNameParam sn)
-    return res -- res :: MonadResource User
+    res <- callWithResponse twInfo mgr $ usersShow (ScreenNameParam sn)
+    case Web.Twitter.Conduit.responseStatus res of
+        HTTP.Status {statusCode = 200, statusMessage = _ } ->
+            return $ Right $ Web.Twitter.Conduit.responseBody res -- res :: User
 
-    where
-    twInfo :: TWInfo
-    twInfo = setCredential tokens credential def
-
-    credential :: Credential
-    credential = Credential [ ("oauth_token", BS.pack CFG.accessToken)
-                            , ("oauth_token_secret", BS.pack CFG.accessTokenSecret) ]
-
-    tokens :: OAuth
-    tokens = twitterOAuth { oauthConsumerKey = BS.pack CFG.oauthConsumerKey
-                          , oauthConsumerSecret = BS.pack CFG.oauthConsumerSecret }
+        HTTP.Status {statusCode=code, statusMessage=msg} ->
+            return $ Left $ ApiError $ "Twitter API returned bad status code: " ++ show code
+                                                                         ++ " " ++ show msg
 
 followUser sn = followUnfollowUser sn (friendshipsCreate (ScreenNameParam sn))
 unfollowUser sn = followUnfollowUser sn (friendshipsDestroy (ScreenNameParam sn))
 
 followUnfollowUser sn req = withManager $ \mgr -> do
-    _ <- call twInfo mgr req
-    res <- call twInfo mgr $ usersShow (ScreenNameParam sn)
-    return res -- res :: MonadResource User
+    res0 <- callWithResponse twInfo mgr req
+    liftIO $ print $ Web.Twitter.Conduit.responseStatus res0
 
-    where
-    twInfo :: TWInfo
-    twInfo = setCredential tokens credential def
+    case Web.Twitter.Conduit.responseStatus res0 of
+        HTTP.Status {statusCode = 200, statusMessage = _ } -> do
+            -- can't get rid of this 'cause on unfollow wtitter doesn't send unfollowed user info
+            -- TODO handle errors
+            res <- call twInfo mgr $ usersShow (ScreenNameParam sn)
+            return $ Right res -- res :: MonadResource User
 
-    credential :: Credential
-    credential = Credential [ ("oauth_token", BS.pack CFG.accessToken)
-                            , ("oauth_token_secret", BS.pack CFG.accessTokenSecret) ]
-
-    tokens :: OAuth
-    tokens = twitterOAuth { oauthConsumerKey = BS.pack CFG.oauthConsumerKey
-                          , oauthConsumerSecret = BS.pack CFG.oauthConsumerSecret }
+        HTTP.Status {statusCode=code, statusMessage=msg} ->
+            return $ Left $ ApiError $ "Twitter API returned bad status code: " ++ show code
+                                                                         ++ " " ++ show msg
 
 
-readHistory :: TweetId -> Int -> IO (Either (ApiError HttpException) [Tweet])
+
+readHistory :: TweetId -> Int -> IO (Either (ApiError HttpException) FeedState)
 readHistory maxid count = do
     info $ "reading history where maxid=" ++ show maxid ++ " and count=" ++ show count
     (_, res) <- readApi $ homeTimelineMaxidCount maxid count
-    return res
+    return $ (TweetMessage <$>) <$> res
 
 updateFeed :: MVar UTCTime -> IO ()
 updateFeed uv = do
@@ -439,7 +443,7 @@ updateFeed uv = do
     _ <- forkIO $ putMVar uv now -- avoid blocking caller
     return ()
 
-updateFeedSync :: DL.MyDb -> MVar [Tweet] -> IO ()
+updateFeedSync :: DL.MyDb -> MVar FeedState -> IO ()
 updateFeedSync db fv = do
     info "Updating feed"
     feedUrl <- getUpdateFeedUrl db
@@ -449,11 +453,11 @@ updateFeedSync db fv = do
   doreq f db fv iter = do
     (_, res) <- readApi f
     case res of
-      Right ts -> handleIncomingTweets db fv (reverse ts)
+      Right ts -> handleIncomingFeedMessages db fv (reverse $ (\x -> TweetMessage x) <$> ts)
 
       Left (TransportError (FailedConnectionException2 _ _ _ ex)) -> if iter < CFG.updateRetryCount
         then do
-          error $ "Http error at update attempt " ++ show iter ++ ": " ++ show ex
+          error $ "Http error at update attempt " ++ show iter ++ "/"++ show CFG.updateRetryCount ++ ": " ++ show ex
                 ++ ". Retrying in " ++ show CFG.updateRetryDelay ++ "ms"
           threadDelay CFG.updateRetryDelay
           doreq f db fv (iter + 1)
@@ -462,35 +466,35 @@ updateFeedSync db fv = do
           error $ "error: update retry count exceeded: error was: " ++ show ex
 
       Left (TransportError ex) -> error $ "error: transport error: " ++ show ex
-      Left (ApiError msg) -> error $ "error: api error: " ++ show msg
+      Left (ApiError msg)      -> error $ "error: api error: " ++ show msg
 
-writeApi :: Url -> IO (Either (ApiError HttpException) Tweet)
+writeApi :: Url -> IO (Either (ApiError HttpException) FeedMessage)
 writeApi url = do
     req <- parseUrl url
     let req' = req { method = "POST" }
     res <- try $ withManager $ \m -> do
-                 signedreq <- signOAuth myoauth mycred req'
+                 signedreq <- signOAuth oauthToken oauthCredential req'
                  httpLbs signedreq m
 
     case res of
-        Left (StatusCodeException (Network.HTTP.Types.Status code msg) _ _)  ->
+        Left (StatusCodeException (HTTP.Status code msg) _ _)  ->
             return $ Left $ ApiError $ "Twitter API returned bad status code: " ++ show code ++ " " ++ show msg
 
         Left e -> return $ Left $ ApiError $ "Other status exception: " ++ show e
 
         Right r -> case eitherDecode $ Network.HTTP.Conduit.responseBody r of
             Left msg -> return $ Left $ ApiError msg
-            Right t  -> return $ Right t
+            Right t  -> return $ Right $ TweetMessage t
 
 readApi :: Feed -> IO (Feed, Either (ApiError HttpException) [Tweet])
 readApi feed = do
   req <- parseUrl $ unfeedUrl feed
   res <- try $ withManager $ \m -> do
-             signedreq <- signOAuth myoauth mycred req
+             signedreq <- signOAuth oauthToken oauthCredential req
              httpLbs signedreq m
 
   case res of
-    Left (StatusCodeException (Network.HTTP.Types.Status code msg) _ _) ->
+    Left (StatusCodeException (HTTP.Status code msg) _ _) ->
       return (feed, Left $ ApiError $ "Twitter API returned bad status code: " ++ show code ++ " " ++ show msg)
     Left x ->
       return (feed, Left $ TransportError x)

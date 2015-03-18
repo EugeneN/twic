@@ -6,8 +6,7 @@ module Main where
 import qualified BL.Core                   as BLC
 import           BL.DataLayer              (MyDb, getPrevState, openDb)
 
-import           BL.Types                  (AppState (..), IPCMessage (..),
-                                            Tweet (..), makeAppState)
+import           BL.Types
 import           BL.Worker                 (streamWorker, timeoutWorker,
                                             updateWorker)
 import           Config                    (port)
@@ -166,7 +165,7 @@ main = do
   case args of
       Just (Args action) -> do
           db <- openDb
-          fv <- newMVar ([] :: [Tweet])
+          fv <- newMVar ([] :: FeedState)
           av <- newEmptyMVar
           uv <- newEmptyMVar
           now <- getCurrentTime

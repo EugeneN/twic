@@ -6,7 +6,9 @@
 :m src/UI/Feed.purs
 :m src/UI/FeedMetadata.purs
 :m src/UI/Messages.purs
+:m src/UI/MyInfo.purs
 :m src/UI/RootLayout.purs
+:m src/UI/SearchInput.purs
 :m src/UI/TweetWriter.purs
 :m src/UI/Types.purs
 :m src/UI/UserInfo.purs

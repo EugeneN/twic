@@ -11,6 +11,8 @@ import UI.Feed (startWsClient, listenFeedKeys, showNewTweets, listenHistoryEvent
 import UI.TweetWriter (listenWriteKeys)
 import UI.RootLayout (renderRootLayout)
 import UI.UserInfo (listenUserInfoKeys)
+import UI.MyInfo (listenMyInfoKeys)
+import UI.SearchInput (listenSearchInputKeys)
 
 
 
@@ -24,6 +26,8 @@ main = do
     listenState state rl
     listenWriteKeys state
     listenUserInfoKeys state
+    listenMyInfoKeys state
+    listenSearchInputKeys state
     listenFeedKeys state
 
     --listenHistoryEvents state

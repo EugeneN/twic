@@ -17,6 +17,8 @@ type Url = String
 foreign import data UUID :: *
 foreign import data UUIDEff :: !
 
+data FeedMessage = TweetMessage Tweet | UserMessage User
+
 newtype OldFeed     = OldFeed [Tweet]
 newtype CurrentFeed = CurrentFeed [Tweet]
 newtype NewFeed     = NewFeed [Tweet]
@@ -42,6 +44,9 @@ data ContextMenu = ContextMenu { visible :: Boolean
                                , tweetId :: Maybe TweetIdS
                                }
 
+data SearchInput = SearchInput { visible :: Boolean
+                               , value   :: String }
+
 data WriteInput = WriteInput { visible  :: Boolean
                              , disabled :: Boolean
                              , value    :: String
@@ -58,14 +63,23 @@ data AFeed = AFeed { oldFeed     :: OldFeed
 data BFeed = BFeed { oldFeed     :: OldFeed
                    , currentFeed :: CurrentFeed
                    , newFeed     :: NewFeed
-                   , author      :: Author }
+                   , author      :: Maybe Author }
+
+data FriendUser = FriendUser { friendUserId :: UserId
+                             , friendUser   :: Maybe User }
+
+data MyInfo = MyInfo { userInfo :: Maybe User
+                     , friends  :: [FriendUser]
+                     , visible  :: Boolean }
 
 data State = State { feed        :: AFeed
-                   , extraFeed   :: Maybe BFeed
+                   , extraFeed   :: Maybe BFeed -- TODO use smth like ExtraFeed = UserFeed{} | SearchFeed {} | etc
                    , errors      :: [StatusMessage]
                    , contextMenu :: ContextMenu
                    , writeInput  :: WriteInput
                    , userInfo    :: UserInfo
+                   , myInfo      :: MyInfo
+                   , searchInput :: SearchInput
                    , historyButtonDisabled :: Boolean }
 
 
@@ -177,8 +191,9 @@ data User = User { userContributorsEnabled              :: Boolean
                  , userWithheldInCountries              :: Maybe String
                  , userWithheldScope                    :: Maybe String }
 
-data ApiResponse  = ResponseSuccess { okTitle   :: String    -- TODO rename ResponseSuccess to ResponseTweets
-                                    , okTweets  :: [Tweet] }
+-- TODO rename ResponseSuccess to ResponseFeedMessage
+data ApiResponse  = ResponseSuccess { okTitle         :: String
+                                    , okFeedMessages  :: [FeedMessage] }
 
                   | ResponseError { errTitle    :: String
                                   , errMessage  :: String }
