@@ -32,7 +32,7 @@ All the checks and feed tracking are done automatically and are invisible for th
 
 Compare with the original Twitter UI:
 
-<img src="res/compare.png" style="width: 600px;"/>
+<img src="screenshot.png" style="width: 600px;"/>
 
 Twic has also a more advanced features - posting new tweets, retweeting, starring tweets, replying, old feed view up to the beginning. Filtered feed views and conversation views are planned.
 
