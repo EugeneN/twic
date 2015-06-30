@@ -77,7 +77,7 @@ searchFeed state = do
         ++ (filterFeed searchTerm cur)
         ++ (filterFeed searchTerm new)
 
-    filterFeed :: String -> [Tweet] -> [Tweet]
+    filterFeed :: String -> Array Tweet -> Array Tweet
     filterFeed st fd = filter (searchWholeTweet st) fd
 
     searchWholeTweet :: String -> Tweet -> Boolean

@@ -22,92 +22,31 @@ import qualified Network.XHR as X
 import qualified Network.XHR.Internal as XI
 import qualified Network.XHR.Types as XT
 
+foreign import setTitle :: forall eff. String -> Eff (dom :: DOM | eff) Unit
 
-foreign import toString
-    """function toString(a){
-        console.log('toString:', a);
-        return a.toString();
-    } """ :: forall a. a -> String
+foreign import toString :: forall a. a -> String
 
-foreign import readInt
-    """function readInt(a){
-        console.log('readInt:', a);
-        var z = parseInt(a, 10);
-        return z;
-    } """ :: forall a. a -> Number
+foreign import readInt :: forall a. a -> Number
 
-foreign import isNumeric
-    """function isNumeric(a){
-        return /^[0-9]+$/.test(a)
-    } """ :: String -> Boolean
+foreign import isNumeric :: String -> Boolean
 
 
-foreign import scrollToTop
-    """function scrollToTop() {
-           console.log('scroll to top');
-           window.scroll(0,0);
-           return undefined;
-    }""" :: forall eff. (Eff (dom :: DOM | eff) Unit)
+foreign import scrollToTop :: forall eff. (Eff (dom :: DOM | eff) Unit)
 
-foreign import jsonStringify
-    """function jsonStringify(o) {
-      return JSON.stringify(o);
-    }""" :: forall r. { | r} -> String
+foreign import jsonStringify :: forall r. { | r} -> String
 
-foreign import extractTarget
-    """function extractTarget(ev){
-        return ev.target;
-    } """ :: J.JQueryEvent -> HTMLElement
+foreign import extractTarget :: J.JQueryEvent -> HTMLElement
 
-foreign import extractCoords
-    """function extractCoords(ev){
-        return [ev.clientX, ev.clientY];
-    } """ :: J.JQueryEvent -> [Number]
+foreign import extractCoords :: J.JQueryEvent -> Array Number
 
-foreign import rioGet
-    """
-    function rioGet(url){
-        return Rx.Observable.create(function(observer){
-            var ok = function(result) { observer.onNext(JSON.stringify(result)) },
-                nok = function(error) { observer.onError(JSON.stringify(error)) };
-            jQuery.ajax(
-                url,
-                { type: 'GET'
-                , success: ok
-                , error: nok
-                });
-        });
-    }
-    """ :: forall a.Url -> Rx.Observable a
+foreign import rioGet :: forall a.Url -> Rx.Observable a
 
-foreign import rioPost
-    """
-    function rioPost(url){
-        return function(data){
-            return Rx.Observable.create(function(observer){
-                var ok = function(result) { observer.onNext(JSON.stringify(result)) },
-                    nok = function(error) { observer.onError(JSON.stringify(error)) };
-                jQuery.ajax(
-                    url,
-                    { type: 'POST'
-                    , data: data
-                    , success: ok
-                    , error: nok
-                    });
-            });
-        }
-    }
-    """ :: forall a b. Url -> b -> Rx.Observable a
+foreign import rioPost :: forall a b. Url -> b -> Rx.Observable a
 
 oneSecond = 1000
 oneMinute = 60 * oneSecond
 
-foreign import getIntervalStream
-    """
-      function getIntervalStream(n) {
-        return Rx.Observable.interval(n);
-      }
-    """ :: forall a. a -> Rx.Observable a
+foreign import getIntervalStream :: forall a. a -> Rx.Observable a
 
 (~>) :: forall eff a. Rx.Observable a -> (a -> Eff eff Unit) -> Eff eff Unit
 (~>) = Rx.subscribe
@@ -124,23 +63,9 @@ rxTest = do
     let s2 = extractCoords <$> s
     s2 ~> (toString >>> trace)
 
-foreign import filterRx
-    """
-    function filterRx(f){
-        return function(observable) {
-            return observable.filter(f)
-        }
-    }
-    """ :: forall a. (a -> Boolean) -> Rx.Observable a -> Rx.Observable a
+foreign import filterRx :: forall a. (a -> Boolean) -> Rx.Observable a -> Rx.Observable a
 
-foreign import byId
-    """
-    function byId(idstr){
-        return function(event) {
-            return event.target.id === idstr;
-        }
-    }
-    """ :: forall a. String -> a -> Boolean
+foreign import byId :: forall a. String -> a -> Boolean
 
 startAppBus state = do
     bodyClicks <- J.select "body" >>= onAsObservable "click"
@@ -148,103 +73,33 @@ startAppBus state = do
 
     pure unit
 
-foreign import value
-    """
-    function value(el) {
-      return el.value;
-    }""" :: Element -> String
+foreign import value :: Element -> String
 
-foreign import setFocus "function setFocus(id) { return function() { jQuery('#' + id).focus(); }}" :: forall eff. String -> Eff eff Unit
-foreign import which "function which(ev) { return ev.which; }" :: forall a. a -> Number
+foreign import setFocus :: forall eff. String -> Eff eff Unit
+foreign import which :: forall a. a -> Number
 
-foreign import scrollToEl
-    """
-    function scrollToEl(id){
-        console.log("scroll to", id, document.getElementById(id));
-        document.getElementById(id).scrollIntoView(true) }
-    """ :: forall eff. String -> (Eff (dom :: DOM | eff) Unit)
+foreign import scrollToEl :: forall eff. String -> (Eff (dom :: DOM | eff) Unit)
 
 foreign import data Timeout :: !
 
-foreign import forkPostpone
-    """
-    function forkPostpone(f) {
-        return function(delay) {
-            return function() {
-                console.log("postponing ", f, delay)
-                setTimeout(f, delay);
-            }
-        }
-    }
-    """ :: forall a eff. a -> Number -> Eff (|eff) Unit
+foreign import forkPostpone :: forall a eff. a -> Number -> Eff (|eff) Unit
 
-foreign import splitAt
-    """
-    function splitAt(as) {
-        return function(idx) {
-            return [as.slice(0, idx), as.slice(idx)]
-        }
-    }
-    """ :: forall a. [a] -> Number -> [[a]]
+foreign import splitAt :: forall a. Array a -> Number -> Array (Array a)
 
 
-foreign import getDeltaY
-    """
-    function getDeltaY(e) { return e.originalEvent.deltaY }
-    """ :: forall a. a -> Number
+foreign import getDeltaY :: forall a. a -> Number
 
-foreign import bufferWithTime
-    """
-    function bufferWithTime(time) {
-        return function(obs) {
-            return obs.bufferWithTime(time)
-        }
-    }
-    """ :: forall a. Number -> Rx.Observable a -> Rx.Observable [a]
+foreign import bufferWithTime :: forall a. Number -> Rx.Observable a -> Rx.Observable (Array a)
 
-foreign import throttleWithTimeout
-    """
-    function throttleWithTimeout(time) {
-        return function(obs) {
-            return obs.throttleWithTimeout(time)
-        }
-    }
-    """ :: forall a. Number -> Rx.Observable a -> Rx.Observable a
+foreign import throttleWithTimeout :: forall a. Number -> Rx.Observable a -> Rx.Observable a
 
-foreign import getWheelObservable
-  """
-  function getWheelObservable(x) {
-    return Rx.Observable.fromEvent(document, 'wheel')
-  }
-  """ :: forall a b. b -> Rx.Observable a
+foreign import getWheelObservable :: forall a b. b -> Rx.Observable a
 
-foreign import getNewObservable
-    """
-    function getNewObservable(x) {
-        return new Rx.Subject()
-    }
-    """ :: forall a b. a -> Rx.Observable b
+foreign import getNewObservable :: forall a b. a -> Rx.Observable b
 
-foreign import publishToObservable
-    """
-    function publishToObservable(obs){
-        return function (val) {
-                obs.onNext(val)
-        }
-    }
-    """ :: forall a b. Rx.Observable a -> b -> Rx.Observable a
+foreign import publishToObservable :: forall a b. Rx.Observable a -> b -> Rx.Observable a
 
-foreign import setProps
-    """
-    function setProps(view) {
-        return function(props) {
-            return function(){
-                view.setProps(props)
-                return null
-            }
-        }
-    }
-    """ :: forall a eff. a -> RefVal State ->  Eff (dom :: DOM, react :: React | eff) Unit
+foreign import setProps :: forall a eff. a -> RefVal State ->  Eff (dom :: DOM, react :: React | eff) Unit
 
 data KeyCode = Insert
              | Escape
@@ -293,72 +148,14 @@ instance eqUUID :: Eq UUID where
 instance showUUID :: Show UUID where
     show ident = showuuid ident
 
-foreign import showuuid
-    """
-    function showuuid(ident) {
-      return ident.toString();
-    }""" :: UUID -> String
+foreign import showuuid :: UUID -> String
 
-foreign import runUUID
-    """
-    function runUUID(UUID) {
-      return UUID();
-    }""" :: Eff (uuid :: UUIDEff) UUID -> UUID
+foreign import runUUID :: Eff (uuid :: UUIDEff) UUID -> UUID
 
-foreign import getUUID
-    """
-    function getUUID() {
-      var i, itoh, s, t, _i;
-      s = [];
-      itoh = '0123456789ABCDEF'.split('');
-      s = (function() {
-        var _i, _results;
-        _results = [];
-        for (i = _i = 0; _i <= 35; i = ++_i) {
-          _results.push(Math.floor(Math.random() * 0x10));
-        }
-        return _results;
-      })();
-      t = (new Date()).getTime() & 0x7FFFFFFF;
-      for (i = _i = 0; _i <= 3; i = ++_i) {
-        s[i] = t & 0xF;
-        t >>= 8;
-      }
-      s[14] = 4;
-      s[19] = (s[19] & 0x3) | 0x8;
-      s = (function() {
-        var _j, _len, _results;
-        _results = [];
-        for (_j = 0, _len = s.length; _j < _len; _j++) {
-          i = s[_j];
-          _results.push(itoh[s[i]]);
-        }
-        return _results;
-      })();
-      s[8] = s[13] = s[18] = s[23] = '-';
-      return s.join('');
-    };
-    """ :: forall eff. Eff (uuid :: UUIDEff | eff) UUID
+foreign import getUUID :: forall eff. Eff (uuid :: UUIDEff | eff) UUID
 
-foreign import callEventHandler
-    """
-    function callEventHandler(f){
-        return function(e){ return f(e)() }
-    }
-    """ :: forall f e eff. f -> e -> Eff ( | eff) Unit
+foreign import callEventHandler :: forall f e eff. f -> e -> Eff ( | eff) Unit
 
-foreign import stopPropagation
-    """
-    function stopPropagation(e) { return function() {e.stopPropagation(); e.preventDefault(); } }
-    """ :: forall a b. a -> Eff ( | b) Unit
+foreign import stopPropagation :: forall a b. a -> Eff ( | b) Unit
 
-foreign import stringReplace
-    """
-    function stringReplace(src){
-        return function(pattern) {
-            return function(replacement){
-                return src.replace(pattern, replacement)
-            }
-        }
-    }
-    """ :: String -> String -> String -> String
+foreign import stringReplace :: String -> String -> String -> String

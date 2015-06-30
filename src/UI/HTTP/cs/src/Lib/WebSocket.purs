@@ -15,25 +15,10 @@ foreign import data CloseEvent :: *
 -- TODO: node buffers
 type Message = String
 
-foreign import mkWebSocket
-  """
-  function mkWebSocket(url) {
-    return function() {
-      return new WebSocket(url)
-    }
-  }
-  """ :: forall e. String -> Eff (ws :: WebSocket | e) Socket
+foreign import mkWebSocket :: forall e. String -> Eff (ws :: WebSocket | e) Socket
 
 foreign import onMessageImpl
-  """
-  function onMessageImpl(socket, callback) {
-    return function() {
-      socket.onmessage = function(msg) {
-        callback(msg.data)()
-      }
-    }
-  }
-  """ :: forall e a.
+  :: forall e a.
   Fn2
     Socket
     (Message -> Eff (ws :: WebSocket | e) a)
@@ -48,13 +33,7 @@ onMessage socket callback =
 
 
 foreign import onErrorImpl
-  """
-  function onErrorImpl(socket, callback) {
-    return function() {
-      socket.onerror = callback
-    }
-  }
-  """ :: forall e a.
+  :: forall e a.
   Fn2
     Socket
     (Eff (ws :: WebSocket | e) a)
@@ -68,13 +47,7 @@ onError socket callback =
   runFn2 onErrorImpl socket callback
 
 foreign import onCloseImpl
-  """
-  function onCloseImpl(socket, callback) {
-    return function() {
-      socket.onclose = callback
-    }
-  }
-  """ :: forall e a.
+  :: forall e a.
   Fn2
     Socket
     (Eff (ws :: WebSocket | e) a)
@@ -87,13 +60,7 @@ onClose :: forall e a.
 onClose socket callback =
   runFn2 onCloseImpl socket callback
 
-foreign import sendImpl
-  """
-  function sendImpl(socket, message) {
-    return function() {
-      socket.send(message)
-    }
-  } """ :: forall e.
+foreign import sendImpl :: forall e.
   Fn2 Socket Message (Eff (ws :: WebSocket | e) Unit)
 
 send :: forall e.

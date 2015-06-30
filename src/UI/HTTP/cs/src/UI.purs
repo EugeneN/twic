@@ -29,16 +29,6 @@ import qualified Data.String as S
 
 import qualified React.DOM as D
 
-
-foreign import setTitle
-    "function setTitle(a){       \
-    \  return function(){        \
-    \    document.title = a;     \
-    \    return undefined;       \
-    \  }                         \
-    \}" :: forall eff. String -> Eff (dom :: DOM | eff) Unit
-
-
 class AsHtml a where
     asHtml :: a -> Component
 
@@ -159,7 +149,7 @@ process entities x = x
 getOrigTweetUrl :: Author -> String -> String
 getOrigTweetUrl (Author {screen_name = screen_name}) tweetId = "https://twitter.com/" ++ screen_name ++ "/status/" ++ tweetId
 
-tweetComponent :: ComponentClass {text :: [TweetElement]
+tweetComponent :: ComponentClass {text :: Array TweetElement
                                  , created_at :: String
                                  , id :: TweetId
                                  , id_str   :: String
@@ -201,14 +191,14 @@ tweetComponent = createClass spec { displayName = "Tweet" , render = renderFun }
 
 
 
-tweetsList :: ComponentClass {tweets :: [Tweet]} {}
+tweetsList :: ComponentClass {tweets :: Array Tweet} {}
 tweetsList = createClass spec { displayName = "TweetsList", render = renderFun }
     where
         renderFun this = case this.props.tweets of
             [] -> pure $ D.ul {id: "feed"} [D.li { className: "no-tweets" } [D.rawText "No new tweets"]]
             _  -> pure $ D.ul {id: "feed"} $ asHtml <$> this.props.tweets
 
-renderTweets :: forall eff. String -> [Tweet] -> Eff (dom :: DOM, react :: React | eff) Component
+renderTweets :: forall eff. String -> Array Tweet -> Eff (dom :: DOM, react :: React | eff) Component
 renderTweets targetId ts = renderComponentById (tweetsList {tweets: ts} []) targetId
 
 renderMessage :: forall eff. String -> String -> Eff (dom :: DOM, react :: React | eff) Component

@@ -19,9 +19,9 @@ foreign import data UUIDEff :: !
 
 data FeedMessage = TweetMessage Tweet | UserMessage User
 
-newtype OldFeed     = OldFeed [Tweet]
-newtype CurrentFeed = CurrentFeed [Tweet]
-newtype NewFeed     = NewFeed [Tweet]
+newtype OldFeed     = OldFeed (Array Tweet)
+newtype CurrentFeed = CurrentFeed (Array Tweet)
+newtype NewFeed     = NewFeed (Array Tweet)
 
 instance semigroupNewFeed :: Semigroup NewFeed where
     (<>) (NewFeed as) (NewFeed bs) = NewFeed $ as ++ bs
@@ -69,12 +69,12 @@ data FriendUser = FriendUser { friendUserId :: UserId
                              , friendUser   :: Maybe User }
 
 data MyInfo = MyInfo { userInfo :: Maybe User
-                     , friends  :: [FriendUser]
+                     , friends  :: Array FriendUser
                      , visible  :: Boolean }
 
 data State = State { feed        :: AFeed
                    , extraFeed   :: Maybe BFeed -- TODO use smth like ExtraFeed = UserFeed{} | SearchFeed {} | etc
-                   , errors      :: [StatusMessage]
+                   , errors      :: Array StatusMessage
                    , contextMenu :: ContextMenu
                    , writeInput  :: WriteInput
                    , userInfo    :: UserInfo
@@ -98,7 +98,7 @@ data Author = Author { name                  :: String
                      , profile_image_url     :: Url
                      }
 
-data Tweet = Tweet { text       :: [TweetElement]
+data Tweet = Tweet { text       :: Array TweetElement
                    , created_at :: String
                    , id         :: TweetId
                    , id_str     :: String
@@ -107,22 +107,22 @@ data Tweet = Tweet { text       :: [TweetElement]
                    , retweet    :: Maybe Tweet
                    }
 
-data Entities = Entities { urls     :: [EntityUrl]
-                         , hashtags :: [EntityHashtag]
-                         , media    :: Maybe [EntityMedia]
+data Entities = Entities { urls     :: Array EntityUrl
+                         , hashtags :: Array EntityHashtag
+                         , media    :: Maybe (Array EntityMedia)
                          }
 
 data EntityUrl = EntityUrl { eExpandedUrl :: Url
                            , eUrl         :: Url
-                           , eIndices     :: [Number]
+                           , eIndices     :: Array Number
                            }
 
 data EntityHashtag = EntityHashtag { hText    :: String
-                                   , hIndices :: [Number]
+                                   , hIndices :: Array Number
                                    }
 
 data EntityMedia = EntityMedia { mType        :: String
-                               , mIndices     :: [Number]
+                               , mIndices     :: Array Number
                                , mUrl         :: Url
                                , mMediaUrl    :: Url
                                , mDisplayUrl  :: String
@@ -193,7 +193,7 @@ data User = User { userContributorsEnabled              :: Boolean
 
 -- TODO rename ResponseSuccess to ResponseFeedMessage
 data ApiResponse  = ResponseSuccess { okTitle         :: String
-                                    , okFeedMessages  :: [FeedMessage] }
+                                    , okFeedMessages  :: Array FeedMessage }
 
                   | ResponseError { errTitle    :: String
                                   , errMessage  :: String }

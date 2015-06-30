@@ -23,6 +23,10 @@
      , "purescript-react":                "joneshf/purescript-react#simplify"
      , "purescript-refs":                 "*"
      , "purescript-lens":                 "*"
+     , "purescript-eff": "*"
+     , "purescript-prelude": "*"
+     , "purescript-st": "*"
+
    },
   "ignore": [
       "**/.*"

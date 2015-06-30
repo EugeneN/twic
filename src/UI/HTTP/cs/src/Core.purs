@@ -270,14 +270,14 @@ instance isForeignMediaSizes :: IsForeign EntityMediaSizes where
 instance showResponse :: Show X.Response where
     show = toString
 
-justTweets :: [FeedMessage] -> [Tweet]
+justTweets :: Array FeedMessage -> Array Tweet
 justTweets xs = (\(TweetMessage t) -> t) <$> filter justTweetMessage xs
 
 justTweetMessage :: FeedMessage -> Boolean
 justTweetMessage (TweetMessage _) = true
 justTweetMessage _                = false
 
-justUsers :: [FeedMessage] -> [User]
+justUsers :: Array FeedMessage -> Array User
 justUsers xs = (\(UserMessage t) -> t) <$> filter justUserMessage xs
 
 justUserMessage :: FeedMessage -> Boolean
@@ -289,8 +289,8 @@ fromResponse x = case (readJSON x :: F ApiResponse) of
   Left err -> ResponseError {errTitle: "Other error", errMessage: ("Can't parse response: " ++ toString err)}
   Right resp -> resp
 
-fromWsMessage :: String -> [FeedMessage]
-fromWsMessage s = case (readJSON s :: F [FeedMessage]) of
+fromWsMessage :: String -> Array FeedMessage
+fromWsMessage s = case (readJSON s :: F (Array FeedMessage)) of
     Left err -> []
     Right ts -> ts
 
@@ -379,7 +379,7 @@ writeInputL :: LensP State WriteInput
 writeInputL = lens (\(State s) -> s.writeInput)
                    (\(State s) wi -> State (s { writeInput = wi }))
 
-messagesL :: LensP State [StatusMessage]
+messagesL :: LensP State (Array StatusMessage)
 messagesL = lens (\(State s) -> s.errors)
                  (\(State s) msgs -> State (s {errors = msgs}))
 
@@ -423,17 +423,6 @@ writeState state value = do
     writeRef state value
     let x = publishToObservable stateObservable value
     pure unit
-
-foreign import setTitle
-    """
-    function setTitle(a) {
-      return function() {
-        document.title = a;
-        return undefined;
-      }
-    }
-    """ :: forall eff. String -> Eff (dom :: DOM | eff) Unit
-
 
 enableHistoryButton = toggleHistoryButton false
 disableHistoryButton = toggleHistoryButton true

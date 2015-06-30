@@ -98,7 +98,7 @@ onError state title message = setMessage state $ errorM message
 
 
 onHistoryTweets :: forall eff. RefVal State
-                            -> [Tweet]
+                            -> Array Tweet
                             -> Eff ( trace :: Trace, ref :: Ref | eff ) Unit
 onHistoryTweets _ [] = do
     trace "got no history tweets"
@@ -111,7 +111,7 @@ onHistoryTweets state ts = do
     writeState state newState
 
 onNewTweets :: forall eff. RefVal State
-                        -> [FeedMessage]
+                        -> Array FeedMessage
                         -> Eff ( trace :: Trace, ref :: Ref | eff ) Unit
 onNewTweets _ [] = do
     trace "got no messages"
@@ -137,7 +137,7 @@ onNewTweets state ts = do
     handleNewUsers userInfo state s ys = case ys of
         [] -> pure unit
         -- TODO check if this works
-        y:_ -> writeState state (s # userInfoL .~ ( (s ^. userInfoL) # userInfoUserdataL .~ (Just y) ) )
+        ys -> writeState state (s # userInfoL .~ ( (s ^. userInfoL) # userInfoUserdataL .~ (Just (ys !! 0)) ) )
 
 getHistoryUrl :: TweetIdS -> Number -> String
 getHistoryUrl maxid count = historyUrl ++ "?maxid=" ++ maxid ++ "&count=" ++ show count
@@ -327,7 +327,7 @@ getTweetById state tid = do
     return $ case res of
         []    -> Nothing
         [x]   -> Just x
-        x:xs  -> Just x
+        xs    -> Just $ x !! 0
 
 handleReplyClick state id_ = do
     resetContextMenu state
@@ -391,10 +391,14 @@ loadUserFeed state author@(Author {screen_name = sn}) = do
             let ts = justTweets xs
 
             case ts of
-              x:xs -> writeState state (s # extraFeedL .~ (Just $ BFeed { oldFeed: OldFeed (reverse xs)
-                                                                        , currentFeed: CurrentFeed [x]
-                                                                        , newFeed: NewFeed []
-                                                                        , author: Just (getAuthor x) }))
+              xs   -> do
+                    let x = head xs
+                        y = tail xs
+
+                    writeState state (s # extraFeedL .~ (Just $ BFeed { oldFeed: OldFeed (reverse tailxs)
+                                                                      , currentFeed: CurrentFeed [x]
+                                                                      , newFeed: NewFeed []
+                                                                      , author: Just (getAuthor x) }))
 
               [x]  -> writeState state (s # extraFeedL .~ (Just $ BFeed { oldFeed: OldFeed []
                                                                         , currentFeed: CurrentFeed [x]
@@ -543,7 +547,7 @@ tweetContextMenu state id_str e = do
                     id_str
 
 tweetComponent :: ComponentClass { state    :: RefVal State
-                                 , text     :: [TweetElement]
+                                 , text     :: Array TweetElement
                                  , created_at :: String
                                  , id       :: TweetId
                                  , id_str   :: String
