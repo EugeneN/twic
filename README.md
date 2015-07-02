@@ -55,6 +55,14 @@ Put *Firebaseio's app url* into a `Config.hs` file.
 Run next commands:
 
 ```
+$ stack build
+$ cd src/UI/HTTP/cs && npm install && bower install && grunt && cd -
+$ stack run twic serve 
+```
+
+or the hard way:
+
+```
 $ cabal sandbox init
 $ cabal install --only-dependencies
 $ cabal build
