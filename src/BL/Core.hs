@@ -29,58 +29,64 @@ module BL.Core (
   , unfollowUser
   , getRunTime
   , tweetUrl
+  , fetchContext
   , replyUrl
   , readHistory
   , getStatus
   , writeApi
+  , sendFetchAccountRequest
   , readApi
   , starUrl
   , twInfo
   ) where
 
-import           Data.Text                 (pack, unpack)
+import           Data.Text                      (pack, unpack)
 
 import           System.IO
 import           Web.Authenticate.OAuth
 
-import qualified Data.ByteString           as B
-import qualified Data.ByteString.Char8     as B8
+import qualified Data.ByteString                as B
+import qualified Data.ByteString.Char8          as B8
 import           Network.HTTP.Conduit
 
-import           Control.Exception.Lifted  (try)
+import           Control.Exception.Lifted       (try)
 
 import           Control.Applicative
-import           Control.Concurrent        (MVar, ThreadId, forkIO, killThread,
-                                            modifyMVar_, newEmptyMVar, newMVar,
-                                            putMVar, readMVar, swapMVar,
-                                            takeMVar, threadDelay, tryTakeMVar)
+import           Control.Concurrent             (MVar, ThreadId, forkIO,
+                                                 killThread, modifyMVar_,
+                                                 newEmptyMVar, newMVar, putMVar,
+                                                 readMVar, swapMVar, takeMVar,
+                                                 threadDelay, tryTakeMVar)
 import           Control.Monad
-import           Control.Monad.Trans       (liftIO)
-import           Network.HTTP.Types        (Status (..))
-import qualified Network.HTTP.Types        as HTTP
+import           Control.Monad.Trans            (liftIO)
+import           Network.HTTP.Types             (Status (..))
+import qualified Network.HTTP.Types             as HTTP
 
-import qualified BL.CloudDataLayer         as CDL
-import qualified BL.DataLayer              as DL
-import           BL.Parser                 (parseTweet)
+import qualified BL.CloudDataLayer              as CDL
+import qualified BL.DataLayer                   as DL
+import           BL.Parser                      (parseTweet)
 import           BL.Types
-import qualified Config                    as CFG
+import qualified Config                         as CFG
 import           Data.Aeson
+import qualified Data.ByteString.Char8          as BS
+import           Data.Conduit
+import qualified Data.Conduit.List              as CL
 import           Data.HashMap.Strict
-import           Data.Int                  (Int64)
-import           Data.Time.Clock           (NominalDiffTime, UTCTime (..),
-                                            diffUTCTime, getCurrentTime,
-                                            secondsToDiffTime)
+import           Data.Int                       (Int64)
+import           Data.Text.Encoding             (decodeUtf8)
+import           Data.Time.Clock                (NominalDiffTime, UTCTime (..),
+                                                 diffUTCTime, getCurrentTime,
+                                                 secondsToDiffTime)
 import           GHC.Generics
-import           Prelude                   hiding (error)
+import           Prelude                        hiding (error)
 import           System.Log.Handler.Simple
 import           System.Log.Logger
-import           Web.Twitter.Conduit.Api   (usersShow)
-import           Web.Twitter.Conduit.Parameters   (UserParam( ScreenNameParam ))
-import           Web.Twitter.Conduit.Base  (call)
-import qualified Web.Twitter.Types         as TT
-import           Web.Twitter.Types
 import           Web.Twitter.Conduit
-import qualified Data.ByteString.Char8     as BS
+import           Web.Twitter.Conduit.Api        (usersShow)
+import           Web.Twitter.Conduit.Base       (call)
+import           Web.Twitter.Conduit.Parameters (UserParam (ScreenNameParam))
+import           Web.Twitter.Types
+import qualified Web.Twitter.Types              as TT
 
 logRealm = "Core"
 
@@ -100,23 +106,27 @@ twInfo :: TWInfo
 twInfo = setCredential oauthToken oauthCredential def
 
 retweetStatusToTweet :: TT.RetweetedStatus -> Tweet
-retweetStatusToTweet s = Tweet (parseTweet $ TT.rsText s)
-                               (pack $ show $ TT.rsCreatedAt s)
-                               (fromIntegral (TT.rsId s) :: Int64)
-                               (show $ TT.rsId s)
-                               (statusUserToAuthor $ TT.rsUser s)
-                               (statusEntitiesToEntities $ TT.rsEntities s)
-                               (Just $ statusToTweet $ TT.rsRetweetedStatus s)
+retweetStatusToTweet s = Tweet { text               = parseTweet $ TT.rsText s
+                               , created_at         = pack $ show $ TT.rsCreatedAt s
+                               , id_                = fromIntegral (TT.rsId s) :: Int64
+                               , id_str             = show $ TT.rsId s
+                               , user               = statusUserToAuthor $ TT.rsUser s
+                               , entities           = statusEntitiesToEntities $ TT.rsEntities s
+                               , retweet            = Just $ statusToTweet $ TT.rsRetweetedStatus s
+                               , status_favorited   = Nothing
+                               , status_retweeted   = Nothing }
 
 statusRetweetToRetweet :: Maybe TT.Status -> Maybe Tweet
 statusToTweet :: TT.Status -> Tweet
-statusToTweet s = Tweet (parseTweet $ TT.statusText s)
-                        (pack $ show $ TT.statusCreatedAt s)
-                        (fromIntegral (TT.statusId s) :: Int64)
-                        (show $ TT.statusId s)
-                        (statusUserToAuthor $ TT.statusUser s)
-                        (statusEntitiesToEntities $ TT.statusEntities s)
-                        (statusRetweetToRetweet $ TT.statusRetweetedStatus s)
+statusToTweet s = Tweet { text              = parseTweet $ TT.statusText s
+                        , created_at        = pack $ show $ TT.statusCreatedAt s
+                        , id_               = fromIntegral (TT.statusId s) :: Int64
+                        , id_str            = show $ TT.statusId s
+                        , user              = statusUserToAuthor $ TT.statusUser s
+                        , entities          = statusEntitiesToEntities $ TT.statusEntities s
+                        , retweet           = statusRetweetToRetweet $ TT.statusRetweetedStatus s
+                        , status_favorited  = TT.statusFavorited s
+                        , status_retweeted  = TT.statusRetweeted s }
 
 statusUserToAuthor :: TT.User -> Author
 statusUserToAuthor s = Author (TT.userName s)
@@ -166,8 +176,10 @@ instance FromJSON Tweet where
     user        <- x .: "user"
     entities    <- x .: "entities"
     retweet     <- x .:? "retweeted_status"
+    favorited   <- x .:? "favorited"
+    retweeted   <- x .:? "retweeted"
 
-    return $ Tweet (parseTweet text) created_at id_ id_str user entities retweet
+    return $ Tweet (parseTweet text) created_at id_ id_str user entities retweet favorited retweeted
 
   parseJSON _ = fail "tweet is expected to be an object"
 
@@ -179,7 +191,19 @@ instance ToJSON Tweet where
                     , "user"       .= user x
                     , "entities"   .= entities x
                     , "retweet"    .= retweet x
+                    , "favorited"  .= status_favorited x
+                    , "retweeted"  .= status_retweeted x
                     ]
+
+instance FromJSON TASettings where
+  parseJSON (Object x) = do
+    sn <- x .: "screen_name"
+    return TASettings { accScreenName = sn }
+
+  parseJSON _ = fail "Account Settings is expected to be an object"
+
+instance ToJSON TASettings where
+  toJSON x = object [ "screen_name" .= accScreenName x ]
 
 instance FromJSON JsonApiError
 instance ToJSON JsonApiError
@@ -297,6 +321,9 @@ instance ToJSON TweetElement where
 
 --------------------------------------------------------------------------------
 
+accountSettingsUrl :: Url
+accountSettingsUrl = "https://api.twitter.com/1.1/account/settings.json"
+
 retweetUrl :: TweetId -> Url
 retweetUrl x = "https://api.twitter.com/1.1/statuses/retweet/" ++ show x ++ ".json"
 
@@ -338,7 +365,7 @@ homeTimelineSinceCount tid count = HomeTimeline $
   ++ show tid ++ "&count=" ++ show count
 
 homeTimelineMaxidCount :: TweetId -> Int -> Feed
-homeTimelineMaxidCount 0 0 = HomeTimeline $
+homeTimelineMaxidCount 0 0 = HomeTimeline
     "https://api.twitter.com/1.1/statuses/home_timeline.json?count=20"
 homeTimelineMaxidCount tid 0 = HomeTimeline $
     "https://api.twitter.com/1.1/statuses/home_timeline.json?count=20&max_id=" ++ show tid
@@ -353,8 +380,9 @@ getUpdateFeedUrl db = do
   info $ "Read from cloud db with result of length: " ++ show (length <$> xs)
 
   let z = case xs of
-          Left x  -> 0
-          Right y -> CDL.lastSeenId (maximum y)
+          Left x   -> 0
+          Right [] -> 0
+          Right y  -> CDL.lastSeenId (maximum y)
 
   debug $ "Selected max tweet id: " ++ show z
   return $ homeTimelineSince z
@@ -372,6 +400,7 @@ saveLastSeenAsync :: DL.MyDb -> FeedState -> IO ThreadId
 saveLastSeenAsync db ts = forkIO $ saveLastSeen db ts >> return ()
 
 saveLastSeen :: DL.MyDb -> FeedState -> IO (Either CDL.CloudDataLayerError CDL.WriteResponse)
+saveLastSeen _ ts | justTweets ts == [] = return $ Right $ CDL.WriteSuccess "write skipped"
 saveLastSeen db ts = do
     now <- getCurrentTime
     res <- CDL.writeCloudDb $ CDL.CloudDbStoreItem (getMaxId $ justTweets ts) (show now) -- now
@@ -380,7 +409,14 @@ saveLastSeen db ts = do
 
     where
     getMaxId :: [Tweet] -> TweetId
+    --getMaxId [] = ?
     getMaxId ts = maximum (BL.Types.id_ <$> ts)
+
+putToClientQueue q ms = do
+    maybeOldMs <- tryTakeMVar q
+    case maybeOldMs of
+        Just oldms -> putMVar q $ oldms ++ ms
+        Nothing    -> putMVar q ms
 
 handleIncomingFeedMessages :: DL.MyDb -> MVar FeedState -> [FeedMessage] -> IO ()
 handleIncomingFeedMessages _ _ [] = do
@@ -388,16 +424,13 @@ handleIncomingFeedMessages _ _ [] = do
     return ()
 handleIncomingFeedMessages _ fv ts = do
     info $ "Got " ++ show (length ts) ++ " updated feed messages/s"
-    maybeOldTs <- tryTakeMVar fv
-    case maybeOldTs of
-        Just oldts -> putMVar fv $ oldts ++ ts
-        Nothing    -> putMVar fv ts
+    putToClientQueue fv ts
 
 readUserstream :: ScreenName -> Int -> IO (Either (ApiError HttpException) FeedState)
 readUserstream sn count = do
     info $ "reading userstream where ScreenName=" ++ show sn ++ " and count=" ++ show count
     (_, res) <- readApi $ BL.Core.userTimeline (unpack sn) count
-    return $ ((TweetMessage <$>) <$> res)
+    return ((TweetMessage <$>) <$> res)
 
 --readuserInfo :: ScreenName -> IO (Either (ApiError HttpException) UserInfo)
 readUserInfo sn = withManager $ \mgr -> do
@@ -436,6 +469,13 @@ readHistory maxid count = do
     (_, res) <- readApi $ homeTimelineMaxidCount maxid count
     return $ (TweetMessage <$>) <$> res
 
+sendFetchAccountRequest :: MVar UTCTime -> IO ()
+sendFetchAccountRequest accv = do
+    now <- getCurrentTime
+    debug $ "***Putting an account fetch request at " ++ show now
+    _ <- forkIO $ putMVar accv now -- avoid blocking caller
+    return ()
+
 updateFeed :: MVar UTCTime -> IO ()
 updateFeed uv = do
     now <- getCurrentTime
@@ -453,7 +493,7 @@ updateFeedSync db fv = do
   doreq f db fv iter = do
     (_, res) <- readApi f
     case res of
-      Right ts -> handleIncomingFeedMessages db fv (reverse $ (\x -> TweetMessage x) <$> ts)
+      Right ts -> handleIncomingFeedMessages db fv (reverse $ TweetMessage <$> ts)
 
       Left (TransportError (FailedConnectionException2 _ _ _ ex)) -> if iter < CFG.updateRetryCount
         then do
@@ -467,6 +507,54 @@ updateFeedSync db fv = do
 
       Left (TransportError ex) -> error $ "error: transport error: " ++ show ex
       Left (ApiError msg)      -> error $ "error: api error: " ++ show msg
+
+fetchContext :: MVar FeedState -> IO ()
+fetchContext fv = do
+    res <- fetchSettings accountSettingsUrl
+    case res of
+        Left err -> putToClientQueue fv [ErrorMessage err]
+        Right settings -> do
+            putToClientQueue fv [SettingsMessage settings]
+            res' <- fetchFriends (accScreenName settings)
+            case res' of
+                Left err' -> putToClientQueue fv [ ErrorMessage err' ]
+                Right fs  -> putToClientQueue fv [ FriendsListMessage fs ]
+
+    where
+    fetchSettings :: Url -> IO (Either JsonApiError TASettings)
+    fetchSettings url = do
+        req <- parseUrl url
+
+        res <- try $ withManager $ \m -> do
+                 signedreq <- signOAuth oauthToken oauthCredential req
+                 httpLbs signedreq m
+
+        case res of
+            Left e  -> return $ Left $ JsonApiError "" (pack $ show (e :: HttpException))
+            Right r -> case eitherDecode $ Network.HTTP.Conduit.responseBody r of
+                Left msg -> return $ Left $ JsonApiError "" $ pack msg
+                Right s  -> return $ Right s
+
+    fetchFriends :: ScreenName -> IO (Either JsonApiError [User])
+    fetchFriends sn = do
+        -- TODO handle exceptions
+        res <- withManager $ \mgr ->
+            sourceWithCursor twInfo mgr (friendsList (ScreenNameParam $ unpack sn)) $$ CL.consume
+
+
+        return $ Right res
+
+--         case res of
+--             Left err -> return $ Left $ JsonApiError "" (decodeUtf8 err)
+--             Right fs -> return $ Right fs
+
+--         res <- callWithResponse twInfo mgr $ friendsList (ScreenNameParam $ unpack sn)
+--         case Web.Twitter.Conduit.responseStatus res of
+--             HTTP.Status {statusCode = 200, statusMessage = _ } ->
+--                 return $ Right $ contents $ Web.Twitter.Conduit.responseBody res -- res :: [User]
+--
+--             HTTP.Status {statusCode=code, statusMessage=msg} ->
+--                 return $ Left $ JsonApiError "" (decodeUtf8 msg)
 
 writeApi :: Url -> IO (Either (ApiError HttpException) FeedMessage)
 writeApi url = do
@@ -521,8 +609,9 @@ getStatus st db = do
     rt <- getRunTime st
 
     let z = case xs of
-              Left _  -> -1 -- unknown or error
-              Right y -> CDL.lastSeenId (maximum y)
+              Left _   -> -1 -- unknown or error
+              Right [] -> -2 -- cloud db empty
+              Right y  -> CDL.lastSeenId (maximum y)
 
     return (z, prevTime, rt)
 

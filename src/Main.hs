@@ -7,8 +7,8 @@ import qualified BL.Core                   as BLC
 import           BL.DataLayer              (MyDb, getPrevState, openDb)
 
 import           BL.Types
-import           BL.Worker                 (streamWorker, timeoutWorker,
-                                            updateWorker)
+import           BL.Worker                 (accountFetchWorker, streamWorker,
+                                            timeoutWorker, updateWorker)
 import           Config                    (port)
 
 import           Network.Wai
@@ -21,7 +21,7 @@ import           Control.Concurrent        (MVar, ThreadId, forkIO, killThread,
                                             myThreadId, newEmptyMVar, newMVar,
                                             putMVar, readMVar, swapMVar,
                                             takeMVar)
-import           Control.Monad             (forever)
+import           Control.Monad             (forever, void)
 
 import           Prelude                   hiding (error)
 import           System.Log.Formatter
@@ -33,6 +33,14 @@ import qualified BL.CloudDataLayer         as CDL
 import qualified Control.Exception         as E
 import           Data.Time.Clock           (diffUTCTime, getCurrentTime)
 import           System.Exit
+
+-- # if defined(mingw32_HOST_OS)
+--import GHC.IO.IOMode
+-- import System.Win32.DebugApi (PHANDLE)
+-- # else
+import System.Posix.Signals
+-- # endif
+
 import           System.Posix.Signals
 import           System.Process
 
@@ -54,7 +62,7 @@ runManager :: forall b. MVar (AppState MyDb) -> IO b
 runManager = monitorAppBus
     where
     monitorAppBus rs = forever $ do
-        (RunState st _ _ _ _ _ _ av uv) <- readMVar rs
+        (RunState st _ _ _ _ _ _ _ av uv _) <- readMVar rs
 
         cmd <- takeMVar av
         case cmd of
@@ -69,13 +77,20 @@ runManager = monitorAppBus
             MExit -> do
                 rt <- BLC.getRunTime st
                 alert $ "Run time: " ++ show rt ++ "\nBye bye :-)"
+                -- TODO implement restart
+                exitWith $ ExitFailure 2
+
+            MRestart -> do
+                rt <- BLC.getRunTime st
+                alert $ "Run time: " ++ show rt ++ "\nSee you in a moment:-)"
                 exitWith $ ExitFailure 1
+
 
             _ ->
                 warn "Unknown command: " -- ++ show cmd
 
     restartStreamWorker rs = do
-        (RunState st db twi maybeSwi hwi uvi fv av uv) <- readMVar rs
+        (RunState st db twi maybeSwi hwi uvi afwi fv av uv accv) <- readMVar rs
         case maybeSwi of
             Just swi -> do
                 info "Killing old stream worker... "
@@ -86,7 +101,7 @@ runManager = monitorAppBus
                 newWorkerId <- streamWorker db fv
                 info "done"
 
-                _ <- swapMVar rs (RunState st db twi (Just newWorkerId) hwi uvi fv av uv)
+                _ <- swapMVar rs (RunState st db twi (Just newWorkerId) hwi uvi afwi fv av uv accv)
                 return ()
             Nothing -> warn "no swi"
 
@@ -94,10 +109,10 @@ runManager = monitorAppBus
 
 handleAction :: String -> MVar (AppState MyDb) -> IO ()
 handleAction "serve" rs = do
-    (RunState st db _ _ _ _ fv av uv) <- readMVar rs
+    (RunState st db _ _ _ _ _ fv av uv accv) <- readMVar rs
 
     info $ "Listening on port " ++ show port
-    app_ <- app st db fv uv
+    app_ <- app st db fv uv accv
     hwid <- httpWorker app_
 
     info "Starting a timeoutWorker"
@@ -109,14 +124,17 @@ handleAction "serve" rs = do
     info "Starting a streamWorker"
     swid <- streamWorker db fv
 
-    _ <- swapMVar rs (RunState st db (Just twid) (Just swid) (Just hwid) (Just uwid) fv av uv)
+    info "Starting an account fetch worker"
+    acwid <- accountFetchWorker accv fv
+
+    _ <- swapMVar rs (RunState st db (Just twid) (Just swid) (Just hwid) (Just uwid) (Just acwid) fv av uv accv)
 
     rc <- system "open http://localhost:3000"
 
     runManager rs
 
 handleAction "cli" rs = do
-    (RunState st db _ _ _ _ fv av uv) <- readMVar rs
+    (RunState st db _ _ _ _ _ fv av uv accv) <- readMVar rs
 
     info "Starting CLI client"
     cwid <- cliClientWorker fv
@@ -133,12 +151,15 @@ handleAction "cli" rs = do
     info "Starting a streamWorker"
     swid <- streamWorker db fv
 
-    _ <- swapMVar rs (RunState st db (Just twid) (Just swid) (Just cwid) (Just uwid) fv av uv)
+    info "Starting an account fetch worker"
+    acwid <- accountFetchWorker accv fv
+
+    _ <- swapMVar rs (RunState st db (Just twid) (Just swid) (Just cwid) (Just uwid) (Just acwid) fv av uv accv)
 
     runManager rs
 
 handleAction "dump" rs = do
-    (RunState st db _ _ _ _ _ _ _) <- readMVar rs
+    (RunState st db _ _ _ _ _ _ _ _ _) <- readMVar rs
     (z, prevTime, rt) <- BLC.getStatus st db
 
     putStrLn "Store dump:"
@@ -168,9 +189,10 @@ main = do
           fv <- newMVar ([] :: FeedState)
           av <- newEmptyMVar
           uv <- newEmptyMVar
+          accv <- newEmptyMVar
           now <- getCurrentTime
 
-          runstate <- newMVar $ makeAppState now db Nothing Nothing Nothing Nothing fv av uv
+          runstate <- newMVar $ makeAppState now db Nothing Nothing Nothing Nothing Nothing fv av uv accv
 
           installHandler keyboardSignal (ctrlCHandler av) Nothing
 

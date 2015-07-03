@@ -9,30 +9,47 @@
   ],
   "license": "MIT",
   "private": true,
-   "dependencies": {
-       "purescript-math":                 "*"
-     , "purescript-simple-dom":           "waterson/purescript-simple-dom"
-     , "purescript-xhr":                  "*"
-     , "purescript-rx":                   "*"
-     , "jquery":                          "*"
-     , "rxjs":                            "*"
-     , "rxjs-jquery":                     "*"
-     , "purescript-foreign":              "*"
-     , "purescript-monoid":               "*"
-     , "react":                           "~0.11.0"
-     , "purescript-react":                "joneshf/purescript-react#simplify"
-     , "purescript-refs":                 "*"
-     , "purescript-lens":                 "*"
-     , "purescript-eff": "*"
-     , "purescript-prelude": "*"
-     , "purescript-st": "*"
-
-   },
+  "dependencies": {
+    "purescript-math": "*",
+    "purescript-simple-dom": "codygman/purescript-simple-dom#a19aa457ccd3db706948dad90f0e2b889b05d787",
+    "purescript-rx": "anttih/purescript-rx#7c2257a1f8793332af0118e2baf9a6ee9d2bca6f",
+    "purescript-foreign": "*",
+    "purescript-monoid": "~0.3.0",
+    "purescript-react": "purescript-contrib/purescript-react#7f12e47cd29231a29bf4d4f8ce299f3aaa2e52d7",
+    "purescript-refs": "purescript/purescript-refs#ea886bbcf778649957ac7b5054722be2c79bd9ce",
+    "purescript-lens": "*",
+    "purescript-eff": "*",
+    "purescript-prelude": "*",
+    "purescript-st": "*",
+    "purescript-aff": "anttih/purescript-aff#ps-0.7",
+    "purescript-profunctor": "purescript/purescript-profunctor#d2dac84f295382d3d528fe299b7f933bbac8cc2c",
+    "purescript-contravariant": "purescript/purescript-contravariant#10b04dccbbaa6e5adebebe977e5f01da4bad5e0d",
+    "purescript-const": "purescript/purescript-const#7ed53c64771cbcfb11715c2e821a1562d9cc673f",
+    "purescript-lens": "purescript-contrib/purescript-lens#15137a2523a9aea00bd407b1b1803f57b36bd30a"
+  },
+  "resolutions": {
+    "purescript-tuples": "~0.4.0",
+    "purescript-monoid": "~0.3.0",
+    "purescript-arrays": "^0.4.0",
+    "purescript-maybe": "^0.3.0",
+    "purescript-foldable-traversable": "~0.4.0",
+    "purescript-control": "~0.3.0",
+    "purescript-either": "^0.2.0",
+    "purescript-aff": "ps-0.7",
+    "purescript-exceptions": "~0.3.0",
+    "purescript-transformers": "~0.6.0",
+    "purescript-identity": "^0.4.0",
+    "purescript-distributive": "^0.5.0",
+    "purescript-profunctor": "d2dac84f295382d3d528fe299b7f933bbac8cc2c",
+    "purescript-contravariant": "10b04dccbbaa6e5adebebe977e5f01da4bad5e0d",
+    "purescript-const": "7ed53c64771cbcfb11715c2e821a1562d9cc673f",
+    "purescript-lens": "purescript-contrib/purescript-lens#15137a2523a9aea00bd407b1b1803f57b36bd30a"
+  },
   "ignore": [
-      "**/.*"
-    , "node_modules"
-    , "bower_components"
-    , "test"
-    , "tests"
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
   ]
 }

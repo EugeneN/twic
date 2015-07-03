@@ -3,23 +3,25 @@ module UI.MyInfo where
 import Data.Maybe
 import Control.Monad.Eff
 import Control.Monad.Eff.Unsafe
-import Control.Monad.Eff
-import DOM (DOM(..))
-import qualified React.DOM as D
-import React (createClass, renderComponentById, spec)
-import React.Types (Component(), ComponentClass(),  React())
-import Types
-import Core (readState, writeState)
 import Data.Array
 import Control.Monad.Eff.Ref
+import DOM (DOM(..))
+
+import React hiding (readState, writeState)
+import qualified React.DOM as D
+import qualified React.DOM.Props as P
+
+import Optic.Setter ((.~))
+import Optic.Getter ((^.))
+import Prelude
+
+import Types
 import Utils
-import Optic.Core ( (.~), (^.))
 import Core
 import UI.Types
-import qualified Control.Monad.JQuery as J
 import qualified Rx.Observable as Rx
-import Rx.JQuery
-
+import qualified Data.Set as DS
+import UI.UserInfo (loadUserInfo')
 
 --loadMyInfo state = do
 --  let url = "/myinfo?sn=" ++ sn
@@ -27,7 +29,7 @@ import Rx.JQuery
 --  disableHistoryButton state
 --  showMyInfo state
 ----
---  (rioGet url) ~> handler
+--  (rioGet url) `Rx.subscribe` handler
 --  pure unit
 ----
 --  where
@@ -45,47 +47,72 @@ import Rx.JQuery
 
       -- TODO handle other cases
 
-showMyInfo :: forall eff. RefVal State -> Eff (ref :: Ref | eff) Unit
+showMyInfo :: forall eff. Ref State -> Eff (ref :: REF | eff) Unit
 showMyInfo state = do
     s <- readState state
     writeState state (s # myInfoL .~ ( (s ^. myInfoL) # myInfoVisibleL .~ true ) )
 
-hideMyInfo :: forall eff. RefVal State -> Eff (ref :: Ref | eff) Unit
+hideMyInfo :: forall eff. Ref State -> Eff (ref :: REF | eff) Unit
 hideMyInfo state = do
     s <- readState state
     writeState state (s # myInfoL .~ ( (s ^. myInfoL) # myInfoVisibleL .~ false ) )
 
 listenMyInfoKeys state = do
-    bodyKeys <- J.select "body" >>= onAsObservable "keyup"
+    bodyKeys <- fromEvent "keyup"
     let keyCodesS = keyEventToKeyCode <$> bodyKeys
-    (filterRx ((==) Insert) keyCodesS) ~> \_ -> showMyInfo state
-    (filterRx ((==) Escape) keyCodesS) ~> \_ -> hideMyInfo state
+    (Rx.filter ((==) Insert) keyCodesS) `Rx.subscribe` \_ -> showMyInfo state
+    (Rx.filter ((==) Escape) keyCodesS) `Rx.subscribe` \_ -> hideMyInfo state
 
+handleMyInfoContextMenu state ev = do
+  stopPropagation ev
+  resetContextMenu state
 
-myInfo :: ComponentClass { state :: RefVal State } {}
-myInfo = createClass spec { displayName = "Messages", render = renderFun } where
-  renderFun this = do
-      State { myInfo = (MyInfo { visible  = visible } ) } <- readState this.props.state
+  hideMyInfo state
+
+  State {account = (Account { settings = mbsettings }) } <- readState state
+
+  case mbsettings of
+    Nothing -> setMessage state (errorM "Account settings not available")
+    Just (TASettings { accScreenName = sn }) -> loadUserInfo' state sn
+
+  pure unit
+
+myInfo = mkUI $ spec {} \this -> do
+      State { myInfo  = (MyInfo { visible  = visible })
+            , account = (Account { friends = friends
+                                 , settings: settings }) } <- getProps this
+
+      let username = case settings of
+                         Nothing -> "Username unknown"
+                         Just (TASettings {accScreenName = asn}) -> asn
+
+          friendsStr = case friends of
+                         Nothing -> "Number of friends not known"
+                         Just x  -> (show $ length $ DS.toList x) ++ " friends"
 
       pure $
-          D.div { className: "user-info"
-                , onContextMenu: callEventHandler stopPropagation
-                , onClick: callEventHandler stopPropagation
-                , style: { display: if visible then "block" else "none"
-                         , height: "460px"
-                         , width: "100%"
-                         , position: "fixed"
-                         , top: "50%"
-                         , "overflow": "hidden"
-                         , "background-color": "rgba(0,0,0,0.95)"
-                         , "box-shadow": "rgb(169, 169, 169) 0px 10px 50px"
-                         , color: "white"
-                         , transform: "translateY(-240px)"
-                         , "-webkit-transform": "translateY(-240px)"
-                         } } [
+          D.div [ P.className "user-info"
+                , P.onDoubleClick: callEventHandler stopPropagation
+                , P.onClick callEventHandler stopPropagation
+                , P.style { display: if visible then "block" else "none"
+                          , height: "460px"
+                          , width: "100%"
+                          , position: "fixed"
+                          , top: "50%"
+                          , "overflow": "hidden"
+                          , "background-color": "rgba(0,0,0,0.95)"
+                          , "box-shadow": "rgb(169, 169, 169) 0px 10px 50px"
+                          , color: "white"
+                          , transform: "translateY(-240px)"
+                          , "-webkit-transform": "translateY(-240px)"
+                          }
+                ] [ D.ul [] [ D.li [ P.className "popup-panel-label"
+                                   , P.style { cursor: "pointer" }
+                                   , P.onClick (callEventHandler $ handleMyInfoContextMenu this.props.state)
+                                   ] [ D.text username ]
 
-                    D.ul {} [ D.li {} [D.rawText "Me"]
-                            , D.li {} [D.rawText "Friends"]
-                            , D.li {} [D.rawText "Favorites"]
+                            , D.li [P.className "popup-panel-label"] [ D.text "Friends: "
+                                                                     , D.text friendsStr ]
+                            , D.li [ P.className "popup-panel-label"] [ D.text "Favorites" ]
                             ]
                   ]

@@ -1,7 +1,5 @@
 module Core where
 
-import Debug.Trace
-import Control.Monad.Eff.Ref
 import Control.Monad.Eff (Eff(..))
 import Data.Foreign
 import Data.Foreign.Index (hasOwnProperty)
@@ -9,22 +7,19 @@ import Data.Foreign.Class
 import Data.Foreign.NullOrUndefined
 import DOM (DOM(..))
 import Control.Monad.Eff.Ref
-import qualified Network.XHR as X
-import qualified Network.XHR.Internal as XI
-import qualified Network.XHR.Types as XT
-
+import Prelude
 import Data.Foreign
 import Data.Foreign.Class
 import Data.Either
 import Data.Monoid
 import Data.Maybe
 import Optic.Core
-import Control.Monad.Eff.Ref
-import Data.Array (filter)
+import Data.Array (filter, concat)
 
 import Utils
 import Types
 import Config
+import Data.Set
 
 
 toTweetToken :: String -> String -> TweetElement
@@ -150,6 +145,8 @@ instance isForeignTweet :: IsForeign Tweet where
         a <- readProp "user" x
         e <- readProp "entities" x
         r <- runNullOrUndefined <$> "retweet" `readProp` x
+        f <- readProp "favorited" x
+        w <- readProp "retweeted" x
 
         return $ Tweet { text: t
                        , created_at: c
@@ -158,7 +155,16 @@ instance isForeignTweet :: IsForeign Tweet where
                        , user: a
                        , entities: e
                        , retweet: r
+                       , favorited: f
+                       , retweeted: w
                        }
+
+instance isForeignTASettings :: IsForeign TASettings where
+    read x = do
+        t <- readProp "screen_name" x
+        return $ TASettings { accScreenName: t }
+
+--------------------------------------------------------------------------------
 
 readFeedMessage x | readProp "tag" x == Right "TweetMessage" = do
     y <- readProp "contents" x
@@ -168,8 +174,22 @@ readFeedMessage x | readProp "tag" x == Right "UserMessage" = do
     y <- readProp "contents" x
     return $ UserMessage y
 
+readFeedMessage x | readProp "tag" x == Right "SettingsMessage" = do
+    y <- readProp "contents" x
+    return $ SettingsMessage y
+
+readFeedMessage x | readProp "tag" x == Right "FriendsListMessage" = do
+    y <- readProp "contents" x
+    return $ FriendsListMessage y
+
+readFeedMessage x | readProp "tag" x == Right "ErrorMessage" = do
+    y <- readProp "contents" x
+    return $ ErrorMessage y
+
 instance isForeignFeedMessage :: IsForeign FeedMessage where
     read = readFeedMessage
+
+--------------------------------------------------------------------------------
 
 readX data_ | hasOwnProperty "errTitle" data_ = do
     m <- readProp "errMessage" data_
@@ -267,9 +287,6 @@ instance isForeignMediaSizes :: IsForeign EntityMediaSizes where
 
     return $ EntityMediaSizes {thumb: thumb, large: large, medium: medium, small: small}
 
-instance showResponse :: Show X.Response where
-    show = toString
-
 justTweets :: Array FeedMessage -> Array Tweet
 justTweets xs = (\(TweetMessage t) -> t) <$> filter justTweetMessage xs
 
@@ -283,6 +300,27 @@ justUsers xs = (\(UserMessage t) -> t) <$> filter justUserMessage xs
 justUserMessage :: FeedMessage -> Boolean
 justUserMessage (UserMessage _) = true
 justUserMessage _               = false
+
+justSettings :: Array FeedMessage -> Array TASettings
+justSettings xs = (\(SettingsMessage t) -> t) <$> filter justSettingsMessage xs
+
+justSettingsMessage :: FeedMessage -> Boolean
+justSettingsMessage (SettingsMessage _) = true
+justSettingsMessage _                   = false
+
+justFriendsLists :: Array FeedMessage -> Array User
+justFriendsLists xs = concat $ (\(FriendsListMessage t) -> t) <$> filter justFriendsListMessage xs
+
+justFriendsListMessage :: FeedMessage -> Boolean
+justFriendsListMessage (FriendsListMessage _) = true
+justFriendsListMessage _                      = false
+
+justErrors :: Array FeedMessage -> Array ApiResponse
+justErrors xs = (\(ErrorMessage t) -> t) <$> filter justErrorMessage xs
+
+justErrorMessage :: FeedMessage -> Boolean
+justErrorMessage (ErrorMessage _) = true
+justErrorMessage _                = false
 
 fromResponse :: String -> ApiResponse
 fromResponse x = case (readJSON x :: F ApiResponse) of
@@ -298,7 +336,7 @@ fromWsMessage s = case (readJSON s :: F (Array FeedMessage)) of
 successM m = Success m (runUUID $ getUUID)
 errorM m = Error m (runUUID $ getUUID)
 
-setMessage :: forall eff. RefVal State -> StatusMessage -> Eff (ref :: Ref | eff) Unit
+setMessage :: forall eff. Ref State -> StatusMessage -> Eff (ref :: REF | eff) Unit
 setMessage state msg = do
     s <- readState state
     writeState state (s # messagesL .~ ((s ^. messagesL) ++ [msg]))
@@ -325,7 +363,29 @@ initialState = State { feed: AFeed { oldFeed: OldFeed []
                                                 , x: 0
                                                 , y: 0
                                                 , tweetId: Nothing }
+                     , account: Account { settings: Nothing
+                                        , friends: Nothing }
                      , errors: [] }
+
+favoritedL :: LensP Tweet Boolean
+favoritedL = lens (\(Tweet x) -> x.favorited)
+                  (\(Tweet x) v -> Tweet (x { favorited = v }))
+
+retweetedL :: LensP Tweet Boolean
+retweetedL = lens (\(Tweet x) -> x.retweeted)
+                  (\(Tweet x) v -> Tweet (x { retweeted = v }))
+
+accountSettingsL :: LensP Account (Maybe TASettings)
+accountSettingsL = lens (\(Account x) -> x.settings)
+                        (\(Account x) v -> Account (x { settings = v }))
+
+accountFriendsL :: LensP Account (Maybe (Set User))
+accountFriendsL = lens (\(Account x) -> x.friends)
+                       (\(Account x) v -> Account (x { friends = v }))
+
+accountL :: LensP State Account
+accountL = lens (\(State x) -> x.account)
+                (\(State x) v -> State (x { account = v }))
 
 searchInputVisibleL :: LensP SearchInput Boolean
 searchInputVisibleL = lens (\(SearchInput x) -> x.visible)
@@ -342,7 +402,7 @@ searchInputL = lens (\(State s) -> s.searchInput)
 myInfoL :: LensP State MyInfo
 myInfoL = lens (\(State s) -> s.myInfo)
                (\(State s) my -> State (s { myInfo = my }))
-               
+
 myInfoVisibleL :: LensP MyInfo Boolean
 myInfoVisibleL = lens (\(MyInfo x) -> x.visible)
                       (\(MyInfo x) v -> MyInfo (x { visible = v }))
@@ -395,15 +455,15 @@ extraFeedL :: LensP State (Maybe BFeed)
 extraFeedL = lens (\(State s) -> s.extraFeed)
                   (\(State s) ef -> State (s {extraFeed = ef}))
 
-newFeedL :: LensP AFeed NewFeed
+newFeedL :: LensP AFeed (NewFeed Tweet)
 newFeedL = lens (\(AFeed s) -> s.newFeed)
                 (\(AFeed s) ts -> AFeed (s { newFeed = ts }))
 
-oldFeedL :: LensP AFeed OldFeed
+oldFeedL :: LensP AFeed (OldFeed Tweet)
 oldFeedL = lens (\(AFeed s) -> s.oldFeed)
                 (\(AFeed s) ts -> AFeed (s { oldFeed = ts }))
 
-currentFeedL :: LensP AFeed CurrentFeed
+currentFeedL :: LensP AFeed (CurrentFeed Tweet)
 currentFeedL = lens (\(AFeed s) -> s.currentFeed)
                     (\(AFeed s) ts -> AFeed (s { currentFeed = ts }))
 
@@ -430,8 +490,3 @@ disableHistoryButton = toggleHistoryButton true
 toggleHistoryButton x state = do
     s <- readState state
     writeState state (s # hbdL .~ x)
-
-
-
-
-

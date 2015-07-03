@@ -3,32 +3,36 @@ module UI.UserInfo where
 import Data.Maybe
 import Control.Monad.Eff
 import Control.Monad.Eff.Unsafe
-import Control.Monad.Eff
 import DOM (DOM(..))
+
+import React hiding (readState, writeState)
 import qualified React.DOM as D
-import React (createClass, renderComponentById, spec)
-import React.Types (Component(), ComponentClass(),  React())
+import qualified React.DOM.Props as P
+
 import Types
 import Core (readState, writeState)
 import Data.Array
 import Control.Monad.Eff.Ref
 import Utils
-import Optic.Core ( (.~), (^.))
+
+import Optic.Setter ((.~))
+import Optic.Getter ((^.))
+import Prelude
+
 import Core
 import UI.Types
-import qualified Control.Monad.JQuery as J
 import qualified Rx.Observable as Rx
-import Rx.JQuery
 
+loadUserInfo state author@(Author {screen_name=sn}) = loadUserInfo' state sn
 
-loadUserInfo state author@(Author {screen_name=sn}) = do
+loadUserInfo' state sn = do
   let url = "/userinfo?sn=" ++ sn
 
   disableHistoryButton state
   clearUserInfo state
   showUserInfo state
 
-  (rioGet url) ~> handler
+  (rioGet url) `Rx.subscribe` handler
   pure unit
 
   where
@@ -46,30 +50,30 @@ loadUserInfo state author@(Author {screen_name=sn}) = do
 
       -- TODO handle other cases
 
-clearUserInfo :: forall eff. RefVal State
-                          -> Eff (ref :: Ref | eff) Unit
+clearUserInfo :: forall eff. Ref State
+                          -> Eff (ref :: REF | eff) Unit
 clearUserInfo state = do
     s <- readState state
     writeState state (s # userInfoL .~ ( (s ^. userInfoL) # userInfoUserdataL .~ Nothing ) )
 
-showUserInfo :: forall eff. RefVal State
-                         -> Eff (ref :: Ref | eff) Unit
+showUserInfo :: forall eff. Ref State
+                         -> Eff (ref :: REF | eff) Unit
 showUserInfo state = do
     s <- readState state
     writeState state (s # userInfoL .~ ( (s ^. userInfoL) # userInfoVisibleL .~ true ) )
 
-hideUserInfo :: forall eff. RefVal State
-                         -> Eff (ref :: Ref | eff) Unit
+hideUserInfo :: forall eff. Ref State
+                         -> Eff (ref :: REF | eff) Unit
 hideUserInfo state = do
     s <- readState state
     writeState state (s # userInfoL .~ ( (s ^. userInfoL) # userInfoVisibleL .~ false ) )
 
 listenUserInfoKeys state = do
-    bodyKeys <- J.select "body" >>= onAsObservable "keyup"
+    bodyKeys <- fromEvent "keyup"
 
     let keyCodesS = keyEventToKeyCode <$> bodyKeys
 
-    (filterRx ((==) Escape) keyCodesS) ~> \_ -> hideUserInfo state
+    (Rx.filter ((==) Escape) keyCodesS) `Rx.subscribe` \_ -> hideUserInfo state
 
 getFollowUrl sn = "/follow?sn=" ++ sn
 getUnfollowUrl sn = "/unfollow?sn=" ++ sn
@@ -90,7 +94,7 @@ handleFollowUnfollow state url = do
   writeState state (s # userInfoL .~ (UserInfo { visible: true
                                                , followRequestActive: true
                                                , userdata: ((s ^. userInfoL) ^. userInfoUserdataL) }))
-  (rioGet url) ~> handler
+  (rioGet url) `Rx.subscribe` handler
   pure unit
 
   where
@@ -117,33 +121,33 @@ followButtonLoaderStyle = { margin: "0px 10px 0px 10px"
 followButton state user = do
   State {userInfo = (UserInfo {followRequestActive = fra})} <- readState state
   pure $ if not fra
-    then D.button { style: { "margin-left": "8px"
-                           , "background-color": "#B0E57C"
-                           , "cursor": "pointer"
-                           , "border-radius": "10px"
-                           , "border": "0px solid green" }
-                           , onClick: callEventHandler $ handleFollow state user.userScreenName }
-                  [D.rawText "Follow"]
-    else D.img { src: "/snake-loader.gif"
-               , style: followButtonLoaderStyle } []
+    then D.button [ P.style { "margin-left": "8px"
+                            , "background-color": "#B0E57C"
+                            , "cursor": "pointer"
+                            , "border-radius": "10px"
+                            , "border": "0px solid green" }
+                  , P.onClick (callEventHandler $ handleFollow state user.userScreenName)
+                  ] [D.text "Follow"]
+    else D.img [ P.src: "/snake-loader.gif"
+               , P.style followButtonLoaderStyle ] []
 
 unfollowButton state user = do
   State {userInfo = (UserInfo {followRequestActive = fra})} <- readState state
   pure $ if not fra
-    then D.button { style: { "margin-left": "8px"
+    then D.button [ P.style { "margin-left": "8px"
                            , "background-color": "#FFAEAE"
                            , "cursor": "pointer"
                            , "border-radius": "10px"
                            , "border": "0px solid red" }
-                           , onClick: callEventHandler $ handleUnfollow state user.userScreenName }
-                  [D.rawText "Unfollow"]
-    else D.img { src: "/snake-loader.gif"
-               , style: followButtonLoaderStyle } []
+                           , P.onClick callEventHandler $ handleUnfollow state user.userScreenName
+                  ] [D.text "Unfollow"]
+    else D.img [ P.src: "/snake-loader.gif"
+               , P.style followButtonLoaderStyle ] []
 
 avatarUrl src = stringReplace src "_normal." "_400x400."
 
 instance asHtmlUser :: AsHtml User where
-    asHtml s (User u) = D.ul { style: { "display": "block"
+    asHtml s (User u) = D.ul [ P.style { "display": "block"
                                        , "width": "600px"
                                        , "text-align": "left"
                                        , "margin": "auto"
@@ -151,102 +155,100 @@ instance asHtmlUser :: AsHtml User where
                                        , "padding": "20px"
                                        --, "color": "#" ++ u.userProfileTextColor
                                        , "background-color": "rgba(0,0,0,0.3)"
-                                       , "height": "420px" } }
-        [ D.li {style: { "margin": "0px"
-                       , "padding": "5px"
-                       , "padding-top": "0px"
-                       , "margin-top": "-5px" }}
-              [D.span {style: {"font-size": "200%"}}
-                  [ D.rawText u.userName
-                  , if u.userVerified then (D.span {style: {color: "blue"}} [D.rawText " •"])
-                                      else (D.rawText "")
-                  , if u.userProtected then (D.span {style: {color: "red"}} [D.rawText " •"])
-                                       else (D.rawText "") ]]
-        , D.li {style: { margin: "0px", padding: "5px" }}
+                                       , "height": "420px" } ]
+        [ D.li [ P.style { "margin": "0px"
+                          , "padding": "5px"
+                          , "padding-top": "0px"
+                          , "margin-top": "-5px" } ]
+              [D.span [ P.style {"font-size": "200%"} ]
+                  [ D.text u.userName
+                  , if u.userVerified then (D.span [ P.style {color: "blue"}] [D.text " •"])
+                                      else (D.text "")
+                  , if u.userProtected then (D.span [ P.style {color: "red"}] [D.text " •"])
+                                       else (D.text "") ]]
+        , D.li [ P.style { margin: "0px", padding: "5px" }]
               [D.a { href: "https://twitter.com/" ++ u.userScreenName
-                   , style: {color: "lightgrey"}
-                   , target: "_blank"} [D.rawText $ "@" ++ u.userScreenName]]
-        , D.li {style: { margin: "0px", padding: "5px" }} [case u.userProfileImageURL of
-            Nothing -> D.rawText ""
+                   , P.style {color: "lightgrey"}
+                   , target: "_blank"} [D.text $ "@" ++ u.userScreenName]]
+        , D.li [ P.style { margin: "0px", padding: "5px" }] [case u.userProfileImageURL of
+            Nothing -> D.text ""
             Just url -> D.img { src: avatarUrl url
-                              , style: {width: "100px"}} []]
-        , D.li {style: { margin: "0px", padding: "5px" }} [case u.userDescription of
-            Nothing -> D.rawText ""
-            Just desc -> D.rawText desc]
-        , D.li {style: { margin: "0px", padding: "5px" }} [case u.userURL of
-            Nothing -> D.rawText ""
-            Just url -> D.a { style: { color: "white"
+                              , P.style {width: "100px"}] []]
+        , D.li [ P.style { margin: "0px", padding: "5px" }} [case u.userDescription of
+            Nothing -> D.text ""
+            Just desc -> D.text desc]
+        , D.li [ P.style { margin: "0px", padding: "5px" }] [case u.userURL of
+            Nothing -> D.text ""
+            Just url -> D.a { P.style { color: "white"
                                      , "text-decoration": "underline"}
                             , href: url
-                            , target: "_blank"} [D.rawText url]]
-        , D.li {style: { margin: "0px", padding: "5px" }} [case u.userLocation of
-            Nothing -> D.rawText ""
-            Just loc -> D.rawText loc]
-        , D.li {style: { margin: "0px", padding: "5px" }} [case u.userTimeZone of
-            Nothing -> D.rawText ""
-            Just tz -> D.rawText $ tz ++ " timezone"]
-        , D.li {style: { margin: "0px", padding: "5px" }} [
-            D.rawText $ "Registered on " ++ u.userCreatedAt]
-        , D.li {style: { margin: "0px", padding: "5px" }} [
-            D.rawText $ show u.userFollowersCount ++ " followers, " ++
+                            , target: "_blank"] [D.text url]]
+        , D.li [ P.style { margin: "0px", padding: "5px" }] [case u.userLocation of
+            Nothing -> D.text ""
+            Just loc -> D.text loc]
+        , D.li [ P.style { margin: "0px", padding: "5px" }] [case u.userTimeZone of
+            Nothing -> D.text ""
+            Just tz -> D.text $ tz ++ " timezone"]
+        , D.li [ P.style { margin: "0px", padding: "5px" }] [
+            D.text $ "Registered on " ++ u.userCreatedAt]
+        , D.li [ P.style { margin: "0px", padding: "5px" }] [
+            D.text $ show u.userFollowersCount ++ " followers, " ++
                         show u.userFriendsCount ++ " friends, " ++
                         show u.userStatusesCount ++ " tweets" ]
-        , D.li {style: { margin: "0px", padding: "5px" }} [case u.userFollowing of
-            Nothing -> D.rawText "Following status unknown"
+        , D.li [ P.style { margin: "0px", padding: "5px" }] [case u.userFollowing of
+            Nothing -> D.text "Following status unknown"
             Just fol -> if fol
-              then D.span {} [ D.rawText "Already following"
+              then D.span [] [ D.text "Already following"
                              , (runEff $ unfollowButton s u) ]
-              else D.span {} [ D.rawText "Not following"
+              else D.span [] [ D.text "Not following"
                              , (runEff $ followButton s u) ]]
         ]
 
-userInfo :: ComponentClass { state :: RefVal State } {}
-userInfo = createClass spec { displayName = "Messages", render = renderFun } where
-  renderFun this = do
+userInfo = mkUI $ spec {} \this -> do
       State { userInfo = (UserInfo { visible  = visible
-                                   , userdata = mbUser } ) } <- readState this.props.state
+                                   , userdata = mbUser } ) } <- getProps this
 
       pure $
-          D.div { className: "user-info"
-                , onContextMenu: callEventHandler stopPropagation
-                , onClick: callEventHandler stopPropagation
-                , style: { display: if visible then "block" else "none"
-                         , height: "460px"
-                         , width: "100%"
-                         , position: "fixed"
-                         , top: "50%"
-                         , "overflow": "hidden"
-                         , "box-shadow": "rgb(169, 169, 169) 0px 10px 50px"
-                         , "background-color": case mbUser of
+          D.div [ P.className "user-info"
+                , P.onDoubleClick callEventHandler stopPropagation
+                , P.onClick callEventHandler stopPropagation
+                , P.style { display: if visible then "block" else "none"
+                          , height: "460px"
+                          , width: "100%"
+                          , position: "fixed"
+                          , top: "50%"
+                          , "overflow": "hidden"
+                          , "box-shadow": "rgb(169, 169, 169) 0px 10px 50px"
+                          , "background-color": case mbUser of
                                                   Nothing -> "rgba(0,0,0,0.95)"
                                                   Just (User u) -> case u.userProfileBackgroundColor of
                                                     Nothing -> "rgba(0,0,0,0.95)"
                                                     Just c -> "#" ++ c
-                         , "background-image": case mbUser of
+                          , "background-image": case mbUser of
                                                   Nothing -> "none"
                                                   Just (User u) -> case u.userProfileBannerURL of
                                                       Nothing -> "none"
                                                       Just src -> "url("++src++")"
-                         , "background-size": case mbUser of
+                          , "background-size": case mbUser of
                                                   Nothing -> "auto"
                                                   Just (User u) -> case u.userProfileBannerURL of
                                                       Nothing -> "auto"
                                                       Just src -> "cover"
-                         , color: "white"
-                         , transform: "translateY(-240px)"
-                         , "-webkit-transform": "translateY(-240px)"
-                         } } [
+                          , color: "white"
+                          , transform: "translateY(-300px)"
+                          , "-webkit-transform": "translateY(-300px)"
+                          } ] [
 
                     case mbUser of
-                        Nothing -> D.img { src: "/snake-loader-darkbg.gif"
-                                         , style: { position: "relative"
-                                                  , top: "200px" } } []
+                        Nothing -> D.img [ P.src "/snake-loader-darkbg.gif"
+                                         , P.style { position: "relative"
+                                                   , top: "200px" } ] []
                         Just user -> asHtml this.props.state user
 
-                  --, D.button { className: "writer-button nok"
-                  --            , style: { position: "absolute"
+                  --, D.button { P.className "writer-button nok"
+                  --            , P.style { position: "absolute"
                   --                     , top: "31px"
                   --                     , transform: "translateX(240px)"
                   --                     }
-                  --            , onClick: hideUserInfo this.props.state } [D.rawText "⨯"]
+                  --            , P.onClick hideUserInfo this.props.state } [D.text "⨯"]
                   ]

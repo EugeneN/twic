@@ -20,18 +20,18 @@ import Core
 import Optic.Core ( (.~), (^.))
 import Data.Foldable
 import Data.Array
-import Data.String (indexOf)
+import Data.String (indexOf, toLower)
 
-showSearchInput :: forall eff. RefVal State
-                            -> Eff (ref :: Ref, dom :: DOM, react :: React, trace :: Trace | eff) Unit
+showSearchInput :: forall eff. Ref State
+                            -> Eff (ref :: REF, dom :: DOM, react :: React, trace :: Trace | eff) Unit
 showSearchInput state = do
     s <- readState state
     writeState state (s # searchInputL .~ SearchInput { visible: true -- resetting all fields
                                                       , value: "" })
     forkPostpone (setFocus "search-input-id") 50
 
-hideSearchInput :: forall eff. RefVal State
-                            -> Eff (ref :: Ref, dom :: DOM, react :: React, trace :: Trace | eff) Unit
+hideSearchInput :: forall eff. Ref State
+                            -> Eff (ref :: REF, dom :: DOM, react :: React, trace :: Trace | eff) Unit
 hideSearchInput state = do
     s <- readState state
     writeState state (s # searchInputL .~ ( (s ^. searchInputL) # searchInputVisibleL .~ false ) )
@@ -46,13 +46,13 @@ asText (Spaces s)     = s
 asText (Unparsable s) = s
 
 tweetElementMatch :: String -> TweetElement -> Boolean
-tweetElementMatch st (AtUsername s) = strMatch st s
-tweetElementMatch st (Link s)       = strMatch st s
-tweetElementMatch st (PlainText s)  = strMatch st s
-tweetElementMatch st (Hashtag s)    = strMatch st s
+tweetElementMatch st (AtUsername s) = strMatch st (toLower s)
+tweetElementMatch st (Link s)       = strMatch st (toLower s)
+tweetElementMatch st (PlainText s)  = strMatch st (toLower s)
+tweetElementMatch st (Hashtag s)    = strMatch st (toLower s)
 tweetElementMatch st (Retweet s)    = false
 tweetElementMatch st (Spaces s)     = false
-tweetElementMatch st (Unparsable s) = strMatch st s
+tweetElementMatch st (Unparsable s) = strMatch st (toLower s)
 
 strMatch :: String -> String -> Boolean
 strMatch searchTerm text = indexOf searchTerm text >= 0
@@ -82,10 +82,11 @@ searchFeed state = do
 
     searchWholeTweet :: String -> Tweet -> Boolean
     searchWholeTweet searchTerm (Tweet {text=body}) =
-        strMatch searchTerm (intercalate "" (asText <$> body))
+        strMatch (toLower searchTerm) (intercalate "" (toLower <<< asText <$> body))
 
     searchTweet :: String -> Tweet -> Boolean
-    searchTweet st (Tweet {text=body}) = any ((==) true) $ (tweetElementMatch st) <$> body
+    searchTweet st (Tweet {text=body}) =
+        any ((==) true) $ (tweetElementMatch (toLower st)) <$> body
 
 handleChange this k = do
     s <- readState this.props.state
@@ -105,11 +106,11 @@ listenSearchInputKeys state = do
 
     let keyCodesS = keyEventToKeyCode <$> bodyKeys
 
-    (filterRx ((==) F3)     keyCodesS) ~> \_ -> showSearchInput state
-    (filterRx ((==) Escape) keyCodesS) ~> \_ -> hideSearchInput state
+    (filterRx ((==) F3)     keyCodesS) `Rx.subscribe` \_ -> showSearchInput state
+    (filterRx ((==) Escape) keyCodesS) `Rx.subscribe` \_ -> hideSearchInput state
 
 
-searchInputComponent :: ComponentClass { state :: RefVal State } {}
+searchInputComponent :: ComponentClass { state :: REFVal State } {}
 searchInputComponent = createClass spec { displayName = "searchInputComponent"
                                         , render = renderFun }
     where
@@ -118,37 +119,38 @@ searchInputComponent = createClass spec { displayName = "searchInputComponent"
                                          , value    = value } ) } <- readState this.props.state
 
       pure $
-          D.div { className: "search-tweet"
-                , onContextMenu: callEventHandler stopPropagation
-                , onClick: callEventHandler stopPropagation
-                , style: { display: if visible then "block" else "none"
-                         , height: "155px"
-                         , width: "100%"
-                         , position: "fixed"
-                         , top: "50%"
-                         , "overflow": "hidden"
-                         , "background-color": "rgba(0,0,0,0.95)"
-                         , "box-shadow": "rgb(169, 169, 169) 0px 10px 50px"
-                         , color: "white"
-                         , transform: "translateY(-140px)"
-                         , "-webkit-transform": "translateY(-140px)"
-                         }} [
-                    D.div {style: { "color": "white"
-                                  , "width": "688px"
-                                  , "padding": "20px"
-                                  , "text-align": "left"
-                                  , "margin": "auto" }} [D.rawText "Search"]
+          D.div [ P.className "search-tweet"
+                , P.onDoubleClick $ callEventHandler stopPropagation
+                , P.onClick $ callEventHandler stopPropagation
+                , P.style { display: if visible then "block" else "none"
+                          , height: "205px"
+                          , width: "100%"
+                          , position: "fixed"
+                          , top: "50%"
+                          , "overflow": "hidden"
+                          , "background-color": "rgba(0,0,0,0.95)"
+                          , "box-shadow": "rgb(169, 169, 169) 0px 10px 50px"
+                          , color: "white"
+                          , transform: "translateY(-140px)"
+                          , "-webkit-transform": "translateY(-140px)"
+                          }] [
+                    D.div [ P.className "popup-panel-label"
+                          , P.style { "color": "white"
+                                    , "width": "688px"
+                                    , "padding": "20px"
+                                    , "text-align": "left"
+                                    , "margin": "auto" }] [D.text "Search"]
 
-                  , D.input { type: "text"
-                            , id: "search-input-id"
-                            , value: value
-                            , style: { width: "597px"
-                                     , "font-size": "25px"
-                                     , padding: "7px 11px 7px 11px" }
-                            , onChange: eventHandler this handleChange
-                            , onKeyUp: eventHandler this handleSearchKeyPress} []
+                  , D.input [ P.type "text"
+                            , P.id "search-input-id"
+                            , P.value value
+                            , P.style { width: "597px"
+                                      , "font-size": "25px"
+                                      , padding: "7px 11px 7px 11px" }
+                            , P.onChange $ eventHandler this handleChange
+                            , P.onKeyUp $ eventHandler this handleSearchKeyPress ] []
 
-                  , D.button { className: "writer-button nok"
-                             , onClick: hideSearchInput this.props.state } [D.rawText "⨯"]
+                  , D.button [ P.className "writer-button nok"
+                             , P.onClick $ hideSearchInput this.props.state ] [D.text "⨯"]
 
                   ]

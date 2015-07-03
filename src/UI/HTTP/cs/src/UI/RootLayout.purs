@@ -30,9 +30,9 @@ resetMenus state = do
   hideUserInfo state
   hideWriteInput state
 
-rootLayout :: ComponentClass { state :: RefVal State } {}
+rootLayout :: ComponentClass { state :: REFVal State } {}
 rootLayout =
-    createClass spec { displayName = "RootLayout", render = renderFun }
+    mkUI $ spec {} 	his -> do
     where
     renderFun this = do
       State { feed = AFeed {oldFeed     = (OldFeed of_)
@@ -41,44 +41,43 @@ rootLayout =
             , errors      = es } <- readState this.props.state
 
       pure $
-        D.div { className: "root-layout"
-              , onContextMenu: (callEventHandler $ contextMenuHandler this.props.state)
-              , onClick: (resetMenus this.props.state) } [
-            D.div { className:  "error" , id: "messages" } [
+        D.div [ P.className "root-layout"
+              , P.onDoubleClick (callEventHandler $ contextMenuHandler this.props.state)
+              , P.onClick (resetMenus this.props.state) ] [
+            D.div [ P.className  "error"
+                  , P.id "messages" ] [
               (errorsList {state: this.props.state} [])]
 
-          , D.div { id: "feed-metadata-container-id" } [
+          , D.div [ P.id "feed-metadata-container-id"] [
               (feedMetadata {state: this.props.state} [])]
 
-          , D.div { id: "load-history-container-id" } [
+          , D.div [ P.id "load-history-container-id"] [
               (historyButton {state: this.props.state} [])]
 
-          , D.div { className:  "container" , id: "container" } [
+          , D.div [ P.className  "container" , id: "container"] [
               (tweetsList {state: this.props.state} [])]
 
-          , D.div { className:  "refresh" , id: "refresh" } [
+          , D.div [ P.className  "refresh" , id: "refresh"] [
               (checkButton {state: this.props.state} []) ]
 
-          , D.div { id: "write-tweet-container-id" } [
+          , D.div [ P.id "write-tweet-container-id"] [
               (writeInputComponent {state: this.props.state} [])]
 
-          , D.div { id: "ctx-menu-container-id" } [
+          , D.div [ P.id "ctx-menu-container-id"] [
               (tweetMenu {state: this.props.state} [])]
 
-          , D.div { id: "userinfo-container-id" } [
+          , D.div [ P.id "userinfo-container-id"] [
               (userInfo {state: this.props.state} [])]
 
-          , D.div { id: "myinfo-container-id" } [
+          , D.div [ P.id "myinfo-container-id"] [
               (myInfo {state: this.props.state} [])]
 
-          , D.div { id: "searchinput-container-id" } [
+          , D.div [ P.id "searchinput-container-id"] [
               (searchInputComponent {state: this.props.state} [])]
         ]
 
 renderRootLayout :: forall eff. String
-                             -> RefVal State
+                             -> Ref State
                              -> Eff (dom :: DOM, react :: React | eff) Component
 renderRootLayout targetId state =
     renderComponentById (rootLayout { state: state } []) targetId
-
-

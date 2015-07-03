@@ -386,6 +386,9 @@ bodyCss = do
   ".blue" ? do
     color blue
 
+  ".popup-panel-label" ? do
+    fontSize (px 36)
+
 
 
 usernameCss :: Css

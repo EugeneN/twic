@@ -6,6 +6,7 @@ import Data.Tuple
 import Data.Function
 import Data.Maybe
 import Control.Monad.Eff
+import Prelude
 
 foreign import data WebSocket :: !
 foreign import data Socket :: *

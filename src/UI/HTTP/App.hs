@@ -8,8 +8,8 @@ import           BL.Core                             (getStatus, readHistory,
                                                       readUserInfo, followUser, unfollowUser,
                                                       readUserstream, replyUrl,
                                                       retweetUrl, saveLastSeen,
-                                                      saveLastSeenAsync,
-                                                      starUrl, tweetUrl,
+                                                      saveLastSeenAsync, sendFetchAccountRequest,
+                                                      starUrl, tweetUrl, fetchContext,
                                                       updateFeed, writeApi)
 import           BL.DataLayer                        (MyDb)
 import           BL.Types                            (FeedState, Message (..),
@@ -150,16 +150,18 @@ sendToClients db cs ts = do
 broadcast :: BSL.ByteString -> WSState -> IO ()
 broadcast msg clients = forM_ clients $ \(_, conn) -> WS.sendTextData conn msg
 
-app :: UTCTime -> MyDb -> MVar FeedState -> MVar UpdateMessage -> IO Application
-app st db fv uv = do
+app :: UTCTime -> MyDb -> MVar FeedState -> MVar UpdateMessage -> MVar UpdateMessage
+    -> IO Application
+app st db fv uv accv = do
     cs <- newMVar ([] :: WSState)
     _ <- startBroadcastWorker db fv cs
     return $ WaiWS.websocketsOr WS.defaultConnectionOptions
-                                (wsapp db fv uv cs)
+                                (wsapp db fv uv accv cs)
                                 (httpapp st db)
 
-wsapp :: MyDb -> MVar FeedState -> MVar UpdateMessage -> MVar WSState -> WS.ServerApp
-wsapp db fv uv cs pending = do
+wsapp :: MyDb -> MVar FeedState -> MVar UpdateMessage -> MVar UpdateMessage -> MVar WSState
+      -> WS.ServerApp
+wsapp db fv uv accv cs pending = do
   conn <- WS.acceptRequest pending
   clientId <- nextRandom
   let client = makeClient clientId conn
@@ -168,6 +170,7 @@ wsapp db fv uv cs pending = do
 
   WS.forkPingThread conn heartbeatDelay
   modifyMVar_ cs $ \cur -> return $ addClient client cur
+  sendFetchAccountRequest accv
   updateFeed uv
   trackConnection client cs
 

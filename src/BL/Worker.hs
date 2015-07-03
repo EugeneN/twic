@@ -74,6 +74,12 @@ timeoutWorker db ch = forkIO $ forever $ do
 
   sendUpdateMessage ch = putMVar ch MReloadFeed
 
+accountFetchWorker :: MVar UpdateMessage -> MVar FeedState -> IO ThreadId
+accountFetchWorker accv fv = forkIO $ forever $ do
+    fetchreq <- takeMVar accv
+    debug $ "Got fetch account request at " ++ show fetchreq
+    BLC.fetchContext fv
+
 updateWorker :: MyDb -> MVar FeedState -> MVar UpdateMessage -> IO ThreadId
 updateWorker db fv uv = forkIO $ forever $ do
     ur <- takeMVar uv

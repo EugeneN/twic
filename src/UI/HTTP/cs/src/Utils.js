@@ -12,19 +12,20 @@ function setTitle(a) {
 function toString(a){
 console.log('toString:', a);
 return a.toString();
-} 
+}
 
 
 function readInt(a){
 console.log('readInt:', a);
 var z = parseInt(a, 10);
 return z;
-} 
+}
 
+exports.fromEvent = function (ev) { return function() {return Rx.Observable.fromEvent(document.body, ev)} }
 
 function isNumeric(a){
 return /^[0-9]+$/.test(a)
-} 
+}
 
 
 
@@ -42,12 +43,12 @@ return JSON.stringify(o);
 
 function extractTarget(ev){
 return ev.target;
-} 
+}
 
 
 function extractCoords(ev){
 return [ev.clientX, ev.clientY];
-} 
+}
 
 
 
@@ -126,7 +127,7 @@ function scrollToEl(id){
 
 
 
-    
+
 
 function forkPostpone(f) {
     return function(delay) {

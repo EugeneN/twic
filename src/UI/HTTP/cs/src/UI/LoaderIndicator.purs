@@ -2,23 +2,19 @@ module UI.LoaderIndicator where
 
 import Control.Monad.Eff (Eff(..))
 import DOM (DOM(..))
+import React
 import qualified React.DOM as D
-import React (createClass, renderComponentById, spec)
-import React.Types (Component(), ComponentClass(),  React())
+import qualified React.DOM.Props as P
+import Prelude
 
+showLoaderComponent = mkUI $ spec {} \this ->
+    pure $ D.div [P.className "no-tweets"] [
+        D.img [P.src "http://eugenen.github.io/resources/public/img/loading1.gif"] []]
 
-showLoaderComponent :: ComponentClass {} {}
-showLoaderComponent = createClass spec { displayName = "Loader", render = renderFun } where
-                      renderFun this = pure $ D.div {className: "no-tweets"} [
-                                                D.img {src: "http://eugenen.github.io/resources/public/img/loading1.gif"} []]
+hideLoaderComponent = mkUI $ spec {} \this -> pure $ D.div [P.className "no-tweets"] []
 
-hideLoaderComponent :: ComponentClass {} {}
-hideLoaderComponent = createClass spec { displayName = "Loader", render = renderFun } where
-                      renderFun this = pure $ D.div {className: "no-tweets"} []
+showLoader :: forall eff. String -> Eff (dom :: DOM | eff) UI
+showLoader targetId = renderToElementById targetId (showLoaderComponent {})
 
-
-showLoader :: forall eff. String -> Eff (dom :: DOM, react :: React | eff) Component
-showLoader targetId = renderComponentById (showLoaderComponent {} []) targetId
-
-hideLoader :: forall eff. String -> Eff (dom :: DOM, react :: React | eff) Component
-hideLoader targetId = renderComponentById (hideLoaderComponent {} []) targetId
+hideLoader :: forall eff. String -> Eff (dom :: DOM | eff) UI
+hideLoader targetId = renderToElementById targetId (hideLoaderComponent {})

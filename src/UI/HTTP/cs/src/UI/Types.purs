@@ -1,9 +1,9 @@
 module UI.Types where
 
 import Types (State())
-import React.Types (Component())
+import React
 import Control.Monad.Eff.Ref
+import Prelude
 
 class AsHtml a where
-    asHtml :: RefVal State -> a -> Component
-
+    asHtml :: REF State -> a -> UI

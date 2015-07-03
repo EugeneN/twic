@@ -28,9 +28,10 @@ import UI.TweetWriter (showReplyInput, showWriteInput)
 import Optic.Core ( (.~), (^.))
 import UI.UserInfo (loadUserInfo)
 import UI.SearchInput (showSearchInput)
+import qualified Data.Set as DS
 
-showNewTweets :: forall eff. RefVal State
-                          -> Eff (ref :: Ref, dom :: DOM, react :: React | eff) Unit
+showNewTweets :: forall eff. Ref State
+                          -> Eff (ref :: REF, dom :: DOM, react :: React | eff) Unit
 showNewTweets state = do
     s@State { feed = AFeed { oldFeed     = (OldFeed of_)
                            , currentFeed = (CurrentFeed cf)
@@ -42,9 +43,9 @@ showNewTweets state = do
     scrollToTop
     pure unit
 
-showOldTweets :: forall eff. RefVal State
+showOldTweets :: forall eff. Ref State
                           -> Number
-                          -> Eff (trace :: Trace, ref :: Ref, dom :: DOM, react :: React | eff) Unit
+                          -> Eff (trace :: Trace, ref :: REF, dom :: DOM, react :: React | eff) Unit
 showOldTweets state count = do
     s@State { extraFeed = ef } <- readState state
 
@@ -97,9 +98,9 @@ showOldTweets state count = do
 onError state title message = setMessage state $ errorM message
 
 
-onHistoryTweets :: forall eff. RefVal State
+onHistoryTweets :: forall eff. Ref State
                             -> Array Tweet
-                            -> Eff ( trace :: Trace, ref :: Ref | eff ) Unit
+                            -> Eff ( trace :: Trace, ref :: REF | eff ) Unit
 onHistoryTweets _ [] = do
     trace "got no history tweets"
     pure unit
@@ -110,31 +111,63 @@ onHistoryTweets state ts = do
         newState = s # feedL .~ (feed # oldFeedL .~  ((OldFeed (reverse ts)) ++ (feed ^. oldFeedL)))
     writeState state newState
 
-onNewTweets :: forall eff. RefVal State
-                        -> Array FeedMessage
-                        -> Eff ( trace :: Trace, ref :: Ref | eff ) Unit
-onNewTweets _ [] = do
+onNewFeedMessages :: forall eff. Ref State
+                              -> Array FeedMessage
+                              -> Eff ( trace :: Trace, ref :: REF | eff ) Unit
+onNewFeedMessages _ [] = do
     trace "got no messages"
     pure unit
 
-onNewTweets state ts = do
+onNewFeedMessages state ts = do
     s <- readState state
-    let feed = s ^. feedL
-        userInfo = s ^. userInfoL
-        tweets = justTweets ts
-        users  = justUsers ts
 
-    handleNewTweets feed state s tweets
-    handleNewUsers userInfo state s users
+    handleNewTweets state s (justTweets ts)
+    handleNewUsers  state s (justUsers ts)
+    handleErrors    state   (justErrors ts)
+    handleAccount   state s (justSettings ts) (justFriendsLists ts)
 
     pure unit
 
     where
-    handleNewTweets feed state s xs = case xs of
-        [] -> pure unit
-        xs -> writeState state (s # feedL .~ (feed # newFeedL .~ ((feed ^. newFeedL) ++ NewFeed xs)))
+    setError (ResponseError {errMessage = msg}) = setMessage state $ errorM msg
+    handleErrors state errors_ = do
+        let z = setError <$> errors_
+        pure unit
 
-    handleNewUsers userInfo state s ys = case ys of
+    -- TODO merge settings?
+    mergeFriends :: Array User -> Maybe (DS.Set User) -> DS.Set User
+    mergeFriends newfriends oldfriends =
+        let newFriends = DS.fromList newfriends
+            oldFriends = case oldfriends of
+                Nothing -> DS.empty
+                Just fs -> fs
+
+        in newFriends `DS.union` oldFriends
+
+    handleAccount state s [] [] = pure unit
+    handleAccount state s settingss [] =
+        writeState state (s # accountL .~ ((s ^. accountL) # accountSettingsL .~ Just (settingss !! 0)))
+
+    handleAccount state s [] friends =
+        writeState state (s # accountL .~
+            ((s ^. accountL) # accountFriendsL .~
+                Just (friends `mergeFriends` (s ^. accountL ^. accountFriendsL) )))
+
+    handleAccount state s settingss friends =
+        writeState state (s # accountL .~ Account { settings: Just (settings !! 0)
+                                                  , friends: Just (friends `mergeFriends` (s ^. accountL ^. accountFriendsL) ) })
+
+    handleNewTweets :: forall eff. Ref State -> State -> Array Tweet -> Eff (ref :: REF | eff) Unit
+    handleNewTweets state s xs = case xs of
+        [] -> pure unit
+        xs -> writeState state (s # feedL .~ (feed # newFeedL .~ (cleanNewFeed rawNewFeed)))
+            where
+            feed = s ^. feedL
+            rawNewFeed = (feed ^. newFeedL) ++ NewFeed xs
+            cleanNewFeed (NewFeed xs) = NewFeed $ nub xs
+
+
+    handleNewUsers state s ys = case ys of
         [] -> pure unit
         -- TODO check if this works
         ys -> writeState state (s # userInfoL .~ ( (s ^. userInfoL) # userInfoUserdataL .~ (Just (ys !! 0)) ) )
@@ -142,13 +175,13 @@ onNewTweets state ts = do
 getHistoryUrl :: TweetIdS -> Number -> String
 getHistoryUrl maxid count = historyUrl ++ "?maxid=" ++ maxid ++ "&count=" ++ show count
 
-maybeLoadMoreHistory :: forall eff. RefVal State
+maybeLoadMoreHistory :: forall eff. Ref State
                                  -> Number
                                  -> TweetIdS
-                                 -> Eff (trace :: Trace, ref :: Ref, react :: React, dom :: DOM | eff) Unit
+                                 -> Eff (trace :: Trace, ref :: REF, react :: React, dom :: DOM | eff) Unit
 maybeLoadMoreHistory state count tid | count == 0 = do
     disableHistoryButton state
-    (rioGet (getHistoryUrl tid 20)) ~> handler
+    (rioGet (getHistoryUrl tid 20)) `Rx.subscribe` handler
 
     where
     handler s = case (fromResponse s) of
@@ -170,36 +203,36 @@ maybeLoadMoreHistory _ _ _ = pure unit
 
 --------------------------------------------------------------------------------
 
-historyButtonContextMenuHandler state ev = do
+historyButtonDoubleClickHandler state ev = do
     stopPropagation ev
     resetContextMenu state
     showSearchInput state
 
-historyButton :: ComponentClass {state :: RefVal State} {}
-historyButton = createClass spec { displayName = "historyButton", render = renderFun }
+historyButton :: ComponentClass {state :: REFVal State} {}
+historyButton = mkUI $ spec {} 	his -> do
     where
     renderFun this = do
         State { historyButtonDisabled = hbd } <- readState this.props.state
 
         pure $
-            D.button { className: if hbd then "history-button disabled"
-                                         else "history-button"
-                     , onClick: showOldTweets this.props.state 1
-                     , onContextMenu: (callEventHandler $ historyButtonContextMenuHandler this.props.state)
-                     , "disabled": if hbd then "disabled" else ""
-                     , id: "load-history-tweets-id"} [ if hbd
-                        then (D.img {src: "/snake-loader.gif"} [])
-                        else (D.rawText "···")]
+            D.button [ P.className $ if hbd then "history-button disabled"
+                                            else "history-button"
+                     , P.onClick (showOldTweets this.props.state 1)
+                     , P.onDoubleClick (callEventHandler $ historyButtonDoubleClickHandler this.props.state)
+                     , P.disabled $ if hbd then "disabled" else ""
+                     , P.id "load-history-tweets-id" ] [
+                        if hbd then (D.img [ P.src "/snake-loader.gif" ] [])
+                               else (D.text "···")]
 
 --------------------------------------------------------------------------------
 
-checkButtonContextMenuHandler state ev = do
+checkButtonDoubleClickHandler state ev = do
     stopPropagation ev
     resetContextMenu state
     showWriteInput state
 
-checkButton :: ComponentClass {state :: RefVal State} {}
-checkButton = createClass spec { displayName = "CheckButton", render = renderFun }
+checkButton :: ComponentClass {state :: REFVal State} {}
+checkButton = mkUI $ spec {} 	his -> do
     where
     renderFun this = do
       State { feed = AFeed { newFeed = (NewFeed nf) } } <- readState this.props.state
@@ -207,11 +240,11 @@ checkButton = createClass spec { displayName = "CheckButton", render = renderFun
       let count = length nf
 
       pure $
-        D.button { className: if count == 0 then "no-new-tweets pop"
-                                            else "there-are-new-tweets pop"
-                 , onClick: showNewTweets this.props.state
-                 , onContextMenu: (callEventHandler $ checkButtonContextMenuHandler this.props.state)
-                 , id: "load-new-tweets-id"} [D.rawText $ show count]
+        D.button [ P.className if count == 0 then "no-new-tweets pop"
+                                             else "there-are-new-tweets pop"
+                 , P.onClick showNewTweets this.props.state
+                 , P.onDoubleClick: (callEventHandler $ checkButtonDoubleClickHandler this.props.state)
+                 , P.id: "load-new-tweets-id" ] [D.text $ show count]
 
 --------------------------------------------------------------------------------
 
@@ -222,8 +255,18 @@ checkButton = createClass spec { displayName = "CheckButton", render = renderFun
 -- .filter(function(ys){ return ys.reduce(function(a,b){ return a + b }, 0) < 0 })
 -- .subscribe(function(x){console.log('^^^', x)})
 
+listenHomeEvents state = do
+    bodyKeys <- J.select "body" >>= onAsObservable "keyup"
+    (filterRx ((==) Home) (keyEventToKeyCode <$> bodyKeys)) `Rx.subscribe` handler state
 
-listenHistoryEvents state = obsE ~> handler
+    where
+    handler state _ =  do
+        s <- readState state
+        case s ^. accountL ^. accountSettingsL of
+            Just (TASettings { accScreenName = sn }) -> loadUserFeedByName state sn
+            Nothing -> onError state "No account info available" "No account info available"
+
+listenHistoryEvents state = obsE `Rx.subscribe` handler
   where
   obsZ = getWheelObservable 1
   --obsZ1 = (\ev -> targetId is "load-history-tweets-id") `filterRx` obsZ
@@ -246,17 +289,17 @@ listenFeedKeys state = do
 
     let keyCodesS = keyEventToKeyCode <$> bodyKeys
 
-    (filterRx ((==) F4) keyCodesS) ~> f
+    (filterRx ((==) F4) keyCodesS) `Rx.subscribe` f
 
     where
     f _ = do
         showNewTweets state
         pure unit
 
-startWsClient :: forall r.  RefVal State
+startWsClient :: forall r.  Ref State
                          -> Eff ( react :: React
                                 , ws    :: WS.WebSocket
-                                , ref   :: Ref
+                                , ref   :: REF
                                 , dom   :: DOM
                                 , trace :: Trace | r) Unit
 startWsClient state = do
@@ -271,7 +314,7 @@ startWsClient state = do
     pure unit
 
     where
-    onMessage m = onNewTweets state $ fromWsMessage m
+    onMessage m = onNewFeedMessages state $ fromWsMessage m
 
     onError = do
         trace $ "ws error"
@@ -286,7 +329,8 @@ handleRetweetClick state id_ = do
     resetContextMenu state
     let url = "/retweet/?id=" ++ id_
     disableHistoryButton state
-    (rioPost url Nothing) ~> retweetResultHandler
+    (rioPost url Nothing) `Rx.subscribe` retweetResultHandler
+    retweetInplace state id_
     pure unit
 
     where
@@ -296,11 +340,47 @@ handleRetweetClick state id_ = do
         setMessage state (successM "Retweeted :-)")
         pure unit
 
+handleUnretweetClick state id_ = do
+    resetContextMenu state
+    let url = "/unretweet/?id=" ++ id_
+    disableHistoryButton state
+    (rioPost url Nothing) `Rx.subscribe` unretweetResultHandler
+    unretweetInplace state id_
+    pure unit
+
+    where
+    unretweetResultHandler resp = do
+        enableHistoryButton state
+        trace $ "unretweeted " ++ show (resp :: AjaxResult)
+        setMessage state (successM "Unretweeted :-)")
+        pure unit
+
+handleUnstarClick state id_ = do
+    resetContextMenu state
+    let url = "/unstar?id=" ++ id_
+    disableHistoryButton state
+    (rioPost url Nothing) `Rx.subscribe` starResultHandler
+    unstarInplace state id_
+    pure unit
+
+    where
+    starResultHandler resp = do
+        enableHistoryButton state
+        trace $ "unstarred " ++ show (resp :: AjaxResult)
+        setMessage state (successM "Unstarred :-)")
+        pure unit
+
+handleOrigLink state url = do
+    resetContextMenu state
+    openInNewWindow url
+    pure unit
+
 handleStarClick state id_ = do
     resetContextMenu state
     let url = "/star?id=" ++ id_
     disableHistoryButton state
-    (rioPost url Nothing) ~> starResultHandler
+    (rioPost url Nothing) `Rx.subscribe` starResultHandler
+    starInplace state id_
     pure unit
 
     where
@@ -310,24 +390,57 @@ handleStarClick state id_ = do
         setMessage state (successM "Starred :-)")
         pure unit
 
+retweetInplace state tid = modifyCurrentFeedInplace state mapRetweet
+  where
+  mapRetweet t@(Tweet {id_str=cid}) = if tid == cid
+    then t # retweetedL .~ true
+    else t
+
+unretweetInplace state tid = modifyCurrentFeedInplace state mapUnretweet
+  where
+  mapUnretweet t@(Tweet {id_str=cid}) = if tid == cid
+    then t # retweetedL .~ false
+    else t
+
+starInplace state tid = modifyCurrentFeedInplace state mapStar
+  where
+  mapStar t@(Tweet {id_str=cid}) = if tid == cid
+    then t # favoritedL .~ true
+    else t
+
+unstarInplace state tid = modifyCurrentFeedInplace state mapUnstar
+  where
+  mapUnstar t@(Tweet {id_str=cid}) = if tid == cid
+    then t # favoritedL .~ false
+    else t
+
+modifyCurrentFeedInplace state mutator = do
+  s@(State {feed = f@(AFeed {currentFeed = cf})}) <- readState state
+  writeState state (s # feedL .~ (f # currentFeedL .~ (mutator <$> cf)))
+
 handleAuthorContextMenu state author@(Author {screen_name=sn}) ev = do
   stopPropagation ev
   resetContextMenu state
   loadUserInfo state author
 
-getTweetById :: forall eff. RefVal State
+getTweetById :: forall eff. Ref State
                          -> TweetIdS
-                         -> Eff (ref :: Ref | eff) (Maybe Tweet)
+                         -> Eff (ref :: REF | eff) (Maybe Tweet)
 getTweetById state tid = do
     s <- readState state
+    return $ getTweetById' s tid
+
+
+getTweetById' ::  State -> TweetIdS -> Maybe Tweet
+getTweetById' s tid =
     let cf = (s ^. feedL) ^. currentFeedL -- TODO make extra feed work too
         unp (CurrentFeed ts) = ts
         res = filter (\(Tweet {id_str = cur_id}) -> cur_id == tid) (unp cf)
 
-    return $ case res of
+    in case res of
         []    -> Nothing
         [x]   -> Just x
-        xs    -> Just $ x !! 0
+        xs    -> Just (x !! 0)
 
 handleReplyClick state id_ = do
     resetContextMenu state
@@ -373,7 +486,7 @@ loadUserFeed state author@(Author {screen_name = sn}) = do
     trace "gonna load user feed"
     let url = "/userfeed/?sn=" ++ sn
     disableHistoryButton state
-    (rioGet url) ~> handler
+    (rioGet url) `Rx.subscribe` handler
 
     where
     getAuthor (Tweet { user = x }) = x
@@ -391,14 +504,10 @@ loadUserFeed state author@(Author {screen_name = sn}) = do
             let ts = justTweets xs
 
             case ts of
-              xs   -> do
-                    let x = head xs
-                        y = tail xs
-
-                    writeState state (s # extraFeedL .~ (Just $ BFeed { oldFeed: OldFeed (reverse tailxs)
-                                                                      , currentFeed: CurrentFeed [x]
-                                                                      , newFeed: NewFeed []
-                                                                      , author: Just (getAuthor x) }))
+              xs   -> writeState state (s # extraFeedL .~ (Just $ BFeed { oldFeed: OldFeed (reverse (tail xs))
+                                                                        , currentFeed: CurrentFeed [(head xs)]
+                                                                        , newFeed: NewFeed []
+                                                                        , author: Just (getAuthor (head xs)) }))
 
               [x]  -> writeState state (s # extraFeedL .~ (Just $ BFeed { oldFeed: OldFeed []
                                                                         , currentFeed: CurrentFeed [x]
@@ -414,121 +523,133 @@ loadUserFeed state author@(Author {screen_name = sn}) = do
 --------------------------------------------------------------------------------
 
 instance asHtmlTweetElement :: AsHtml TweetElement where
-    asHtml s (AtUsername sn)   = D.span {className: "username-tag"} [
-                                  D.span { href: ("https://twitter.com/" ++ sn)
-                                         , onClick: loadUserFeedByName s sn
-                                         --, onContextMenu: (callEventHandler $ handleAuthorContextMenu state a)
-                                         , style: { "cursor": "pointer"
-                                                  , "color": "black" }
-                                         , target: "_blank" } [D.rawText $ "@" ++ sn]]
+    asHtml s (AtUsername sn)   = D.span [ P.className "username-tag"} [
+                                      D.span { P.href ("https://twitter.com/" ++ sn)
+                                             , P.onClick $ loadUserFeedByName s sn
+                                             --, P.onDoubleClick: (callEventHandler $ handleAuthorContextMenu state a)
+                                             , P.style { "cursor": "pointer"
+                                                       , "color": "black" }
+                                             , P.target "_blank" } [D.text $ "@" ++ sn]]
 
-    asHtml _ (Link s)         = D.a { className: "inline-link"
-                                  , target: "_blank", href: s} [D.rawText $ linkToText s]
-        where
-            linkToText u = case (S.split "/" u) !! 2 of
-                Nothing -> u
-                Just x  -> x
+    asHtml _ (Link s)         = D.a [ P.className "inline-link"
+                                    , P.target "_blank", href: s ] [D.text $ linkToText s]
+        where linkToText u = case (S.split "/" u) !! 2 of
+                                Nothing -> u
+                                Just x  -> x
 
-    asHtml _ (PlainText s)    = D.span { className: "text-tag"
-                                     , dangerouslySetInnerHTML: {__html: s}} []
+    asHtml _ (PlainText s)    = D.span [ P.className "text-tag"
+                                       , P.dangerouslySetInnerHTML {__html: s}] []
 
-    asHtml _ (Hashtag s)      = D.span {className: "hash-tag"} [
-                                D.a { href: ("https://twitter.com/hashtag/" ++ s ++ "?src=hash")
-                                    , target: "_blank"}
-                                    [D.rawText $ "#" ++ s]]
+    asHtml _ (Hashtag s)      = D.span [ P.className "hash-tag"} [
+                                    D.a [ P.href ("https://twitter.com/hashtag/" ++ s ++ "?src=hash")
+                                        , P.target "_blank" ] [D.text $ "#" ++ s]]
 
-    asHtml _ (Retweet s)      = D.span {className: "retweet-tag"} [D.rawText "RT"]
+    asHtml _ (Retweet s)      = D.span [ P.className "retweet-tag" ] [D.text "RT"]
 
-    asHtml _ (Spaces s)       = D.span {} [D.rawText s]
+    asHtml _ (Spaces s)       = D.span [] [D.text s]
 
-    asHtml _ (Unparsable s)   = D.span {className: "unparsable"} [D.rawText s]
+    asHtml _ (Unparsable s)   = D.span [ P.className "unparsable" ] [D.text s]
 
 instance asHtmlTweet :: AsHtml Tweet where
     asHtml state (Tweet { text = t , created_at = c , id = i , id_str = s , user = u
-                  , entities = e , retweet = Nothing }) =
+                  , entities = e , retweet = Nothing, favorited=favorited, retweeted=retweeted }) =
         tweetComponent { state: state, text: t, created_at: c, id: i, id_str: s, author: u
-                       , entities: e, retweeted_by: Nothing } []
+                       , entities: e, retweeted_by: Nothing, favorited: favorited, retweeted: retweeted } []
 
     asHtml state (Tweet {  created_at = c , id = i , id_str = s , user = u , retweet = Just (
                 Tweet { text = origText , created_at = origCreatedAt , id = origId
-                      , id_str = origIdString, entities = origEntities, user = origAuthor}) }) =
+                      , id_str = origIdString, entities = origEntities, user = origAuthor, favorited=favorited, retweeted=retweeted}) }) =
         tweetComponent { state: state, text: origText, created_at: c, id: i, id_str: s
-                       , author: u, entities: origEntities, retweeted_by: Just origAuthor} []
+                       , author: u, entities: origEntities, retweeted_by: Just origAuthor, favorited: favorited, retweeted: retweeted} []
 
 
 instance asHtmlAuthor :: AsHtml Author where
     asHtml state a@(Author {name = n, screen_name = sn, profile_image_url = avatar})
-        = D.span {className: "user-icon"} [
-            D.span {href: "https://twitter.com/" ++ sn, target: "_blank"} [
-                D.img { className: "user-icon-img"
-                      , style: { "cursor": "pointer" }
-                      , onClick: loadUserFeed state a
-                      , onContextMenu: (callEventHandler $ handleAuthorContextMenu state a)
-                      , src: avatar, title: n} []]]
+        = D.span [ P.className "user-icon"} [
+            D.span [ P.href "https://twitter.com/" ++ sn
+                   , target: "_blank" ] [ D.img [ P.className "user-icon-img"
+                                                , P.style { "cursor": "pointer" }
+                                                , P.onClick $ loadUserFeed state a
+                                                , P.onDoubleClick (callEventHandler $ handleAuthorContextMenu state a)
+                                                , P.src avatar
+                                                , P.title n ] []]]
 
 instance asHtmlEntities :: AsHtml Entities where
     asHtml state (Entities { urls = us
                      , hashtags = hs
                      , media = mms })
         = case mms of
-            Just ms -> D.div {className: "media"} ((asHtml state) <$> ms)
-            Nothing -> D.div {className: "media"} []
+            Just ms -> D.div [ P.className "media" ] ((asHtml state) <$> ms)
+            Nothing -> D.div [ P.className "media" ] []
 
 instance asHtmlMedia :: AsHtml EntityMedia where
     asHtml state (EntityMedia { mType = type_
-                        , mMediaUrl = url
-                        })
+                              , mMediaUrl = url })
         = case type_ of
-            "photo" -> D.img {className: "inline-img", src: url} []
-            x -> D.div {className: "unknown-media"} [D.rawText "Unknown media"]
+            "photo" -> D.a [ P.href url, P.target "_blank" ] [
+                        D.img [ P.className "inline-img", P.src url ] []]
+            x -> D.div [ P.className "unknown-media" ] [D.text "Unknown media"]
 
 --------------------------------------------------------------------------------
 
-tweetMenu :: ComponentClass { state :: RefVal State } {}
-tweetMenu = createClass spec { displayName = "TweetMenu", render = renderFun }
-    where
-    renderFun this = do
-      State { contextMenu = (ContextMenu { visible = visible
-                                         , x = x
-                                         , y = y
-                                         , tweetId = maybeTid
-                                         }) } <- readState this.props.state
+tweetMenu = mkUI $ spec {} \this -> do
+      s@(State { contextMenu = (ContextMenu { visible = visible
+                                            , x = x
+                                            , y = y
+                                            , tweetId = maybeTid
+                                            }) }) <- readState this.props.state
 
       pure $ case maybeTid of
-        Just tid -> D.span { className: "toolbar-target"
-                           , onContextMenu: callEventHandler stopPropagation
-                           , onClick: callEventHandler stopPropagation
-                           , style: { display: if visible then "block" else "none"
-                                    , position: "absolute"
-                                    , left: x
-                                    , top: y
-                                    } } [
-                        D.ul {className: "toolbar", id: ("menu-" ++ tid)} [
-                            D.li { "data-tweet-id": tid
-                                 , title: "Retweet"
-                                 , onClick: handleRetweetClick this.props.state tid}
-                              [D.rawText "RT"]
+        Just tid ->
+            let mbTweet = getTweetById' s tid
+            in D.span [ P.className "toolbar-target"
+                      , P.onDoubleClick $ callEventHandler stopPropagation
+                      , P.onClick $ callEventHandler stopPropagation
+                      , P.style { display: if visible then "block" else "none"
+                                , position: "absolute"
+                                , left: x
+                                , top: y
+                                } ] [
 
-                          , D.li { title: "Reply"
-                                 , onClick: handleReplyClick this.props.state tid }
-                              [D.rawText "↩"]
+                    case mbTweet of
+                        Nothing ->  D.span [ P.className "toolbar-target" ] [ D.text "No tweet found o_O" ]
 
-                          , D.li { title: "Star"
-                                 , onClick: handleStarClick this.props.state tid }
-                              [D.rawText "★"]
+                        Just (Tweet { favorited = favorited
+                                    , retweeted = retweeted}) ->
+                            D.ul [ P.className "toolbar", P.id ("menu-" ++ tid) ] [
+                                if retweeted
+                                    then
+                                        D.li [ P.title "Un-retweet"
+                                             , P.onClick $ handleUnretweetClick this.props.state tid ]
+                                          [D.text "♻"]
+                                    else
+                                        D.li [ P.title "Retweet"
+                                             , P.onClick $ handleRetweetClick this.props.state tid ]
+                                          [D.text "♲"]
 
-                          , D.li {}
-                              [D.a {href: (getOrigTweetUrl (Author { name: "fake"
-                                                                   , authorId: 0
-                                                                   , screen_name: "this.props.author"
-                                                                   , default_profile_image: true
-                                                                   , profile_image_url: "-"}) tid)
-                                                                   , target: "_blank"
-                                                                   , title: "View original"}
-                                 [D.rawText "⌘"]]
-                          ] ]
+                              , D.li [ P.title "Reply"
+                                     , P.onClick $ handleReplyClick this.props.state tid ]
+                                  [D.text "↩"]
 
-        Nothing -> D.span {className: "toolbar-target"} [ D.rawText "No tweet selected" ]
+                              , if favorited
+                                    then
+                                        D.li [ P.title "Unstar"
+                                             , P.onClick $ handleUnstarClick this.props.state tid ]
+                                          [D.text "♥"]
+                                    else
+                                        D.li [ P.title "Star"
+                                             , P.onClick $ handleStarClick this.props.state tid ]
+                                          [D.text "♡"]
+
+                              , D.li [ P.title "View original"
+                                     , P.onClick $ handleOrigLink this.props.state (getOrigTweetUrl (Author { name: "fake"
+                                                                                                            , authorId: 0
+                                                                                                            , screen_name: "this.props.author"
+                                                                                                            , default_profile_image: true
+                                                                                                            , profile_image_url: "-"}) tid) ] [D.text "⌘"]
+                              ] ]
+
+        Nothing -> D.span [ P.className "toolbar-target" ] [ D.text "No tweet selected" ]
 
 
 
@@ -546,52 +667,62 @@ tweetContextMenu state id_str e = do
                     e.nativeEvent.pageY
                     id_str
 
-tweetComponent :: ComponentClass { state    :: RefVal State
-                                 , text     :: Array TweetElement
-                                 , created_at :: String
-                                 , id       :: TweetId
-                                 , id_str   :: String
-                                 , author   :: Author
-                                 , entities :: Entities
-                                 , retweeted_by :: Maybe Author} {}
-tweetComponent = createClass spec { displayName = "Tweet" , render = renderFun }
+tweetComponent :: ComponentClass { state        :: REFVal State
+                                 , text         :: Attay TweetElement
+                                 , created_at   :: String
+                                 , id           :: TweetId
+                                 , id_str       :: String
+                                 , author       :: Author
+                                 , entities     :: Entities
+                                 , retweeted_by :: Maybe Author
+                                 , retweeted    :: Boolean
+                                 , favorited    :: Boolean } {}
+tweetComponent = mkUI $ spec {} \this -> do
     where
     authorToHtml state a Nothing = asHtml state a
     authorToHtml state a@(Author { name = name, screen_name = sn
                                  , profile_image_url = avatar})
                     (Just (b@(Author { name = origName, screen_name = origSn
                                      , profile_image_url = origAvatar}))) =
-        D.span {className: "user-icon"} [
-            D.span {className: "user-icon2"} [
-                D.span {href: "https://twitter.com/" ++ origSn, target: "_blank"} [
-                    D.img { className: "user-icon-img"
-                          , onClick: loadUserFeed state b
-                          , style: { "cursor": "pointer" }
-                          , src: origAvatar
-                          , onContextMenu: (callEventHandler $ handleAuthorContextMenu state b)
-                          , title: "Original author: " ++ origName} []]]
-          , D.span {className: "user-icon1"} [
-                D.span {href: "https://twitter.com/" ++ sn, target: "_blank"} [
-                    D.img { className: "user-icon-img"
-                          , onClick: loadUserFeed state a
-                          , style: { "cursor": "pointer" }
-                          , src: avatar
-                          , onContextMenu: (callEventHandler $ handleAuthorContextMenu state a)
-                          , title: name} []]]
+        D.span [ P.className "user-icon" ] [
+            D.span [ P.className "user-icon2" ] [
+                D.span [ P.href "https://twitter.com/" ++ origSn, P.target "_blank" ] [
+                    D.img [ P.className "user-icon-img"
+                          , P.onClick loadUserFeed state b
+                          , P.style { "cursor": "pointer" }
+                          , P.src origAvatar
+                          , P.onDoubleClick (callEventHandler $ handleAuthorContextMenu state b)
+                          , P.title $ "Original author: " ++ origName ] []]]
+          , D.span [ P.className "user-icon1"} [
+                D.span [ P.href "https://twitter.com/" ++ sn
+                       , P.target "_blank" ] [
+                    D.img [ P.className "user-icon-img"
+                          , P.onClick loadUserFeed state a
+                          , P.style { "cursor": "pointer" }
+                          , P.src avatar
+                          , P.onDoubleClick (callEventHandler $ handleAuthorContextMenu state a)
+                          , P.title name ] []]]
           ]
 
+    bgColor fav retw | fav  &&      retw  = "rgb(216, 241, 251)"
+    bgColor fav retw | fav  && (not retw) = "yellow"
+    bgColor fav retw | retw && (not fav)  = "rgb(213, 255, 213)"
+    bgColor _ _                           = "transparent"
+
     renderFun this = pure $
-        D.li {id: this.props.id_str} [
+        D.li { id: this.props.id_str
+             } [
             authorToHtml this.props.state this.props.author this.props.retweeted_by
-          , D.span { className: "tweet-body"
+          , D.span { P.className "tweet-body"
+                   , P.style {"background-color": bgColor this.props.favorited this.props.retweeted}
                    , "data-tweet-id": this.props.id_str
-                   , onContextMenu: (callEventHandler $ tweetContextMenu this.props.state this.props.id_str)
+                   , P.onDoubleClick: (callEventHandler $ tweetContextMenu this.props.state this.props.id_str)
                    } ((asHtml this.props.state) <<< (processTweetElement this.props.entities) <$> this.props.text)
           , asHtml this.props.state this.props.entities ]
 
 
-tweetsList :: ComponentClass {state :: RefVal State} {}
-tweetsList = createClass spec { displayName = "TweetsList", render = renderFun }
+tweetsList :: ComponentClass {state :: REFVal State} {}
+tweetsList = mkUI $ spec {} 	his -> do
     where
     renderFun this = do
         State { feed = AFeed { newFeed = (NewFeed nf)
@@ -605,10 +736,10 @@ tweetsList = createClass spec { displayName = "TweetsList", render = renderFun }
                     x -> (show x) ++ " new tweets"
 
                 case cf of
-                    [] -> pure $ D.ul {id: "feed" , onClick: (\ev -> feedClickHandler ev)}
-                            [D.li { className: "no-tweets" } [D.rawText "EOF"]]
+                    [] -> pure $ D.ul {id: "feed" , P.onClick (\ev -> feedClickHandler ev)}
+                            [D.li { P.className "no-tweets" } [D.text "EOF"]]
 
-                    _  -> pure $ D.ul {id: "feed" , onClick: (\ev -> feedClickHandler ev) }
+                    _  -> pure $ D.ul {id: "feed" , P.onClick (\ev -> feedClickHandler ev) }
                             $ (asHtml this.props.state) <$> cf
 
             Just (BFeed { author = mbAuthor
@@ -618,17 +749,17 @@ tweetsList = createClass spec { displayName = "TweetsList", render = renderFun }
                 Nothing -> do
                     setTitle "Maybe Search results"
                     case cf of
-                        [] -> pure $ D.ul {id: "feed" , onClick: (\ev -> feedClickHandler ev)}
-                                [D.li { className: "no-tweets" } [D.rawText "EOF"]]
+                        [] -> pure $ D.ul {id: "feed" , P.onClick (\ev -> feedClickHandler ev)}
+                                [D.li { P.className "no-tweets" } [D.text "EOF"]]
 
-                        _  -> pure $ D.ul {id: "feed" , onClick: (\ev -> feedClickHandler ev) }
+                        _  -> pure $ D.ul {id: "feed" , P.onClick (\ev -> feedClickHandler ev) }
                                 $ (asHtml this.props.state) <$> cf
 
                 Just (Author {screen_name = sn}) -> do
                     setTitle $ sn ++ "'s tweets"
                     case cf of
-                        [] -> pure $ D.ul {id: "feed", onClick: (\ev -> feedClickHandler ev)}
-                                [D.li {className: "no-tweets" } [D.rawText "EOF"]]
+                        [] -> pure $ D.ul {id: "feed", P.onClick (\ev -> feedClickHandler ev)}
+                                [D.li [ P.className "no-tweets" } [D.text "EOF"]]
 
-                        _  -> pure $ D.ul {id: "feed", onClick: (\ev -> feedClickHandler ev)}
+                        _  -> pure $ D.ul {id: "feed", P.onClick (\ev -> feedClickHandler ev)}
                                 $ (asHtml this.props.state) <$> cf

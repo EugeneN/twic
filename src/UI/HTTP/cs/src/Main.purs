@@ -7,7 +7,7 @@ import Config
 import Types
 import Utils
 import Core
-import UI.Feed (startWsClient, listenFeedKeys, showNewTweets, listenHistoryEvents)
+import UI.Feed (startWsClient, listenFeedKeys, showNewTweets, listenHistoryEvents, listenHomeEvents)
 import UI.TweetWriter (listenWriteKeys)
 import UI.RootLayout (renderRootLayout)
 import UI.UserInfo (listenUserInfoKeys)
@@ -23,12 +23,13 @@ main = do
     state <- newRef initialState
     rl <- renderRootLayout "root" state
 
-    listenState state rl
-    listenWriteKeys state
-    listenUserInfoKeys state
-    listenMyInfoKeys state
-    listenSearchInputKeys state
-    listenFeedKeys state
+    listenState             state rl
+    listenWriteKeys         state
+    listenUserInfoKeys      state
+    listenMyInfoKeys        state
+    listenSearchInputKeys   state
+    listenFeedKeys          state
+    listenHomeEvents        state
 
     --listenHistoryEvents state
 
@@ -37,7 +38,7 @@ main = do
     pure unit
 
     where
-    listenState state rl = stateObservable ~> (\_ -> do
+    listenState state rl = stateObservable `Rx.subscribe` (\_ -> do
         trace $ "Got state update" ++ toString state
         --renderRootLayout "root" state
         setProps rl state

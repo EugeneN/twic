@@ -51,6 +51,11 @@
 :m bower_components/purescript-lens/src/Optic/Prism.purs
 :m bower_components/purescript-lens/src/Optic/Setter.purs
 :m bower_components/purescript-lens/src/Optic/Types.purs
+:m bower_components/purescript-maps/src/Data/Map.purs
+:m bower_components/purescript-maps/src/Data/StrMap.purs
+:m bower_components/purescript-maps/src/Data/StrMap/ST.purs
+:m bower_components/purescript-maps/src/Data/StrMap/ST/Unsafe.purs
+:m bower_components/purescript-maps/src/Data/StrMap/Unsafe.purs
 :m bower_components/purescript-math/src/Math.purs
 :m bower_components/purescript-maybe/src/Data/Maybe.purs
 :m bower_components/purescript-maybe/src/Data/Maybe/Unsafe.purs
@@ -74,6 +79,7 @@
 :m bower_components/purescript-rx/src/Rx/JQuery.purs
 :m bower_components/purescript-rx/src/Rx/Observable.purs
 :m bower_components/purescript-rx/src/Rx/Observable/Cont.purs
+:m bower_components/purescript-sets/src/Data/Set.purs
 :m bower_components/purescript-simple-dom/src/Data/DOM/Simple/Ajax.purs
 :m bower_components/purescript-simple-dom/src/Data/DOM/Simple/Document.purs
 :m bower_components/purescript-simple-dom/src/Data/DOM/Simple/Element.purs
@@ -88,8 +94,10 @@
 :m bower_components/purescript-simple-dom/src/Data/DOM/Simple/Unsafe/Utils.purs
 :m bower_components/purescript-simple-dom/src/Data/DOM/Simple/Unsafe/Window.purs
 :m bower_components/purescript-simple-dom/src/Data/DOM/Simple/Window.purs
+:m bower_components/purescript-strings/src/Data/Char/Char.purs
 :m bower_components/purescript-strings/src/Data/String.purs
 :m bower_components/purescript-strings/src/Data/String/Regex.purs
+:m bower_components/purescript-strings/src/Data/String/Unsafe.purs
 :m bower_components/purescript-transformers/src/Control/Comonad/Env.purs
 :m bower_components/purescript-transformers/src/Control/Comonad/Env/Class.purs
 :m bower_components/purescript-transformers/src/Control/Comonad/Env/Trans.purs

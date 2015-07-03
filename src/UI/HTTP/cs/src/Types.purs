@@ -3,6 +3,8 @@ module Types where
 import Data.Maybe
 import Data.Monoid
 import Control.Monad.Eff (Eff(..))
+import Data.Set
+import Prelude
 
 type TweetId = Number
 type TweetIdS = String
@@ -17,20 +19,40 @@ type Url = String
 foreign import data UUID :: *
 foreign import data UUIDEff :: !
 
-data FeedMessage = TweetMessage Tweet | UserMessage User
+data Account = Account { settings :: Maybe TASettings
+                       , friends  :: Maybe (Set User) }
 
-newtype OldFeed     = OldFeed (Array Tweet)
-newtype CurrentFeed = CurrentFeed (Array Tweet)
-newtype NewFeed     = NewFeed (Array Tweet)
+data TASettings = TASettings { accScreenName :: String }
 
-instance semigroupNewFeed :: Semigroup NewFeed where
-    (<>) (NewFeed as) (NewFeed bs) = NewFeed $ as ++ bs
+data FeedMessage = TweetMessage Tweet
+                 | UserMessage User
+                 | SettingsMessage TASettings
+                 | FriendsListMessage Array User
+                 | ErrorMessage ApiResponse
 
-instance semigroupOldFeed :: Semigroup OldFeed where
-    (<>) (OldFeed as) (OldFeed bs) = OldFeed $ as ++ bs
+data OldFeed a     = OldFeed (Array a)
+data CurrentFeed a = CurrentFeed (Array a)
+data NewFeed a     = NewFeed (Array a)
 
-instance semigroupCurrentFeed :: Semigroup CurrentFeed where
-    (<>) (CurrentFeed as) (CurrentFeed bs) = CurrentFeed $ as ++ bs
+instance semigroupNewFeed :: Semigroup (NewFeed a) where
+    (<>) (NewFeed as) (NewFeed bs) = NewFeed $ as <> bs
+
+instance semigroupOldFeed :: Semigroup (OldFeed a) where
+    (<>) (OldFeed as) (OldFeed bs) = OldFeed $ as <> bs
+
+instance semigroupCurrentFeed :: Semigroup (CurrentFeed a) where
+    (<>) (CurrentFeed as) (CurrentFeed bs) = CurrentFeed $ as <> bs
+
+
+instance functorNewFeed :: Functor NewFeed where
+    (<$>) f (NewFeed xs) = NewFeed $ f <$> xs
+
+instance functorOldFeed :: Functor OldFeed where
+    (<$>) f (OldFeed xs) = OldFeed $ f <$> xs
+
+instance functorCurrentFeed :: Functor CurrentFeed where
+    (<$>) f (CurrentFeed xs) = CurrentFeed $ f <$> xs
+
 
 type Msgid = UUID
 
@@ -56,13 +78,13 @@ data UserInfo = UserInfo { visible :: Boolean
                          , followRequestActive :: Boolean
                          , userdata :: Maybe User }
 
-data AFeed = AFeed { oldFeed     :: OldFeed
-                   , currentFeed :: CurrentFeed
-                   , newFeed     :: NewFeed }
+data AFeed = AFeed { oldFeed     :: OldFeed Tweet
+                   , currentFeed :: CurrentFeed Tweet
+                   , newFeed     :: NewFeed Tweet }
 
-data BFeed = BFeed { oldFeed     :: OldFeed
-                   , currentFeed :: CurrentFeed
-                   , newFeed     :: NewFeed
+data BFeed = BFeed { oldFeed     :: OldFeed Tweet
+                   , currentFeed :: CurrentFeed Tweet
+                   , newFeed     :: NewFeed Tweet
                    , author      :: Maybe Author }
 
 data FriendUser = FriendUser { friendUserId :: UserId
@@ -80,6 +102,7 @@ data State = State { feed        :: AFeed
                    , userInfo    :: UserInfo
                    , myInfo      :: MyInfo
                    , searchInput :: SearchInput
+                   , account     :: Account
                    , historyButtonDisabled :: Boolean }
 
 
@@ -105,6 +128,8 @@ data Tweet = Tweet { text       :: Array TweetElement
                    , user       :: Author
                    , entities   :: Entities
                    , retweet    :: Maybe Tweet
+                   , favorited  :: Boolean
+                   , retweeted  :: Boolean
                    }
 
 data Entities = Entities { urls     :: Array EntityUrl
@@ -149,6 +174,16 @@ data Observer = Observer { ok :: forall e. AjaxResult -> Eff e Unit
 type UTCTime = String
 type UserId = Number
 type LanguageCode = String
+
+instance userOrd :: Ord User where
+    compare (User {userId=a}) (User {userId=b}) =
+        if a > b then GT
+        else if a < b then LT
+                      else EQ
+
+instance userEq :: Eq User where
+  (==) (User {userId=a}) (User {userId=b}) = a == b
+  (/=) (User {userId=a}) (User {userId=b}) = a /= b
 
 data User = User { userContributorsEnabled              :: Boolean
                  , userCreatedAt                        :: UTCTime
@@ -206,5 +241,3 @@ data ApiResponse  = ResponseSuccess { okTitle         :: String
 
 data CheckResponse = CheckResponse { unreadTitle :: String
                                    , unreadCount :: Number }
-
-

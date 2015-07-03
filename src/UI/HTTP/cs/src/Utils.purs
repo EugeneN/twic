@@ -1,26 +1,20 @@
 module Utils where
 
-import Debug.Trace
 import Control.Monad.Eff (Eff(..))
 import Control.Monad.Eff.Ref
+import Control.Monad.Eff.Console
 import DOM (DOM(..))
-import qualified Control.Monad.JQuery as J
 import Data.DOM.Simple.Types (HTMLElement(..))
 import Data.DOM.Simple.Element (getAttribute)
+import Prelude
 
 import qualified Rx.Observable as Rx
-import Rx.JQuery
 
 import Types
 
 import Data.Either
 import Data.Monoid
 import Data.Array (length, reverse)
-import React.Types (React(), Element())
-
-import qualified Network.XHR as X
-import qualified Network.XHR.Internal as XI
-import qualified Network.XHR.Types as XT
 
 foreign import setTitle :: forall eff. String -> Eff (dom :: DOM | eff) Unit
 
@@ -30,14 +24,15 @@ foreign import readInt :: forall a. a -> Number
 
 foreign import isNumeric :: String -> Boolean
 
+foreign import fromEvent :: forall eff z. String -> Eff (dom :: DOM | eff) (Rx.Observable z)
 
 foreign import scrollToTop :: forall eff. (Eff (dom :: DOM | eff) Unit)
 
 foreign import jsonStringify :: forall r. { | r} -> String
 
-foreign import extractTarget :: J.JQueryEvent -> HTMLElement
+foreign import extractTarget :: forall a. a -> HTMLElement
 
-foreign import extractCoords :: J.JQueryEvent -> Array Number
+foreign import extractCoords :: forall a. a -> Array Number
 
 foreign import rioGet :: forall a.Url -> Rx.Observable a
 
@@ -48,32 +43,9 @@ oneMinute = 60 * oneSecond
 
 foreign import getIntervalStream :: forall a. a -> Rx.Observable a
 
-(~>) :: forall eff a. Rx.Observable a -> (a -> Eff eff Unit) -> Eff eff Unit
-(~>) = Rx.subscribe
-
-
-rxTest :: forall e. Eff (trace :: Trace, dom :: DOM | e) Unit
-rxTest = do
-    spansStream <- J.select "span" >>= onAsObservable "mouseover"
-    imgsStream <- J.select "img" >>= onAsObservable "mouseover"
-
-    let s = spansStream <> imgsStream
---    s ~> (toString >>> trace)
-
-    let s2 = extractCoords <$> s
-    s2 ~> (toString >>> trace)
-
-foreign import filterRx :: forall a. (a -> Boolean) -> Rx.Observable a -> Rx.Observable a
-
 foreign import byId :: forall a. String -> a -> Boolean
 
-startAppBus state = do
-    bodyClicks <- J.select "body" >>= onAsObservable "click"
-    (filterRx (byId "load-new-tweets-id") bodyClicks) ~> \_ -> trace "click"
-
-    pure unit
-
-foreign import value :: Element -> String
+foreign import value :: HTMLElement -> String
 
 foreign import setFocus :: forall eff. String -> Eff eff Unit
 foreign import which :: forall a. a -> Number
@@ -99,7 +71,7 @@ foreign import getNewObservable :: forall a b. a -> Rx.Observable b
 
 foreign import publishToObservable :: forall a b. Rx.Observable a -> b -> Rx.Observable a
 
-foreign import setProps :: forall a eff. a -> RefVal State ->  Eff (dom :: DOM, react :: React | eff) Unit
+foreign import setProps :: forall a eff. a -> Ref State ->  Eff (dom :: DOM | eff) Unit
 
 data KeyCode = Insert
              | Escape
@@ -110,6 +82,8 @@ data KeyCode = Insert
              | F3
              | F4
              | F5
+             | Home
+             | End
              | UnknownKey Number
 
 keyEventToKeyCode :: forall a. a -> KeyCode -- JQueryEvent a, ReactEvent a =>
@@ -122,6 +96,8 @@ keyEventToKeyCode x | which x == 13  = Enter
                     | which x == 114 = F3
                     | which x == 115 = F4
                     | which x == 116 = F5
+                    | which x == 36  = Home
+                    | which x == 35  = End
 
 keyEventToKeyCode x                  = UnknownKey $ which x
 
@@ -135,6 +111,8 @@ instance eqKeyCode :: Eq KeyCode where
     (==) F3     F3     = true
     (==) F4     F4     = true
     (==) F5     F5     = true
+    (==) Home   Home   = true
+    (==) End    End    = true
     (==) _      _      = false
 
     (/=) a      b      = not $ (==) a b
