@@ -38,26 +38,22 @@ Twic has also a more advanced features - posting new tweets, retweeting, starrin
 
 # Run
 
-Go to https://apps.twitter.com/ and create a new app, consumer key and access token. Access level may be read only, or read and write if you would like to make a retweets.
+### *I don't want to compile anything, let me just download and run it* 
 
-Go to https://www.firebase.com/signup/ and create a free account, then create an app or use the one provided by default. This cloud database is used to sync feed state between all the instances of the application you'll run.
+See [https://github.com/EugeneN/twic/wiki/Quick-start](https://github.com/EugeneN/twic/wiki/Quick-start)
 
-Then run this in a shell:
+
+### *My interests are more unconventional:*
+
+
+Run this in a shell:
 
 ```
 $ git clone https://github.com/EugeneN/twic.git
 $ cd twic
-```
-Put *Consumer Key (API Key)*, *Consumer Secret (API Secret)*, *Access Token*, *Access Token Secret* into a `Config.hs` file.
 
-Put *Firebaseio's app url* into a `Config.hs` file.
-
-Run next commands:
-
-```
-$ stack build
 $ cd src/UI/HTTP/cs && npm install && bower install && grunt && cd -
-$ stack run twic serve 
+$ stack install
 ```
 
 or the hard way:
@@ -65,10 +61,24 @@ or the hard way:
 ```
 $ cabal sandbox init
 $ cabal install --only-dependencies
-$ cabal build
 $ cd src/UI/HTTP/cs && npm install && bower install && grunt && cd -
-$ ./dist/build/twic/twic serve 0
+$ cabal build
 ```
+
+Provide your auth details using this instrunction: [https://github.com/EugeneN/twic/wiki/Quick-start#how-to-configure-and-run-twic](https://github.com/EugeneN/twic/wiki/Quick-start#how-to-configure-and-run-twic)
+
+Run:
+
+```
+$ stack run twic serve 
+```
+
+or, if built with cabal:
+
+```
+$ ./dist/build/twic/twic serve 
+```
+
 Go to [http://localhost:3000/](http://localhost:3000/)
 
 # TODO
