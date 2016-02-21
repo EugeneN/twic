@@ -56,7 +56,7 @@ instance Show (MVar UTCTime)
 makeAppState :: UTCTime -> a
              -> Maybe ThreadId -> Maybe ThreadId -> Maybe ThreadId -> Maybe ThreadId -> Maybe ThreadId
              -> MVar FeedState -> MVar IPCMessage -> MVar UpdateMessage -> MVar UpdateMessage
-             -> Config
+             -> Cfg
              -> AppState a
 makeAppState a b c d e f g h j i k l =
     RunState { startTime        = a
@@ -75,6 +75,12 @@ makeAppState a b c d e f g h j i k l =
 
 -- deriving instance Show Config
 
+data Cfg = Cfg { cfgOauthConsumerKey    :: String
+               , cfgOauthConsumerSecret :: String
+               , cfgAccessToken         :: String
+               , cfgAccessTokenSecret   :: String
+               , cfgCloudDbUrl          :: String } deriving Show
+
 data AppState a = RunState { startTime        :: UTCTime
                            , db               :: a
                            , timeoutWorkerId  :: Maybe ThreadId
@@ -86,8 +92,8 @@ data AppState a = RunState { startTime        :: UTCTime
                            , appBusVar        :: MVar IPCMessage
                            , updateVar        :: MVar UpdateMessage
                            , fetchAccountVar  :: MVar UpdateMessage
-                           , conf             :: Config
-                           } -- deriving Show
+                           , conf             :: Cfg
+                           } deriving Show
 
 data Feed = UserTimeline Url
           | HomeTimeline Url

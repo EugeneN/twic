@@ -22,4 +22,4 @@ updateRetryCount = 30 :: Int
 updateRetryDelay = 2 * oneSecond
 updateFeedAsync = False
 
-cloudDbUrl = "https://sweltering-heat-9224.firebaseio.com/.json" :: String
+-- cloudDbUrl = "https://sweltering-heat-9224.firebaseio.com/.json" :: String

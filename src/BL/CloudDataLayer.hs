@@ -5,7 +5,7 @@
 
 module BL.CloudDataLayer where
 
-import           BL.Types                  (TweetId)
+import           BL.Types                  (TweetId, Cfg(..))
 import qualified Config                    as CFG
 import           Control.Applicative
 import           Control.Exception.Base
@@ -81,9 +81,9 @@ readCloudJSON str = case decode str :: Maybe (Map String CloudDbStoreItem) of
     Nothing -> Left $ CloudDbDataError "error reading cloud json"
 
 -- TODO offline garbage collection.
-readCloudDb :: IO (Either CloudDataLayerError CloudDbStore)
-readCloudDb = do
-    req <- parseUrl $ applyLimit CFG.cloudDbUrl "lastSeenId" 10
+readCloudDb :: String -> IO (Either CloudDataLayerError CloudDbStore)
+readCloudDb url = do
+    req <- parseUrl $ applyLimit url "lastSeenId" 10
     res <- try $ withManager $ \m -> httpLbs req m
 
     return $ case res of
@@ -93,9 +93,9 @@ readCloudDb = do
             Right xs -> Right xs
 
 
-writeCloudDb :: CloudDbStoreItem -> IO (Either CloudDataLayerError WriteResponse)
-writeCloudDb data_ = do
-    req <- parseUrl CFG.cloudDbUrl
+writeCloudDb :: CloudDbStoreItem -> Cfg -> IO (Either CloudDataLayerError WriteResponse)
+writeCloudDb data_ cfg = do
+    req <- parseUrl (cfgCloudDbUrl cfg)
     let req' = req { method = "POST"
                    , requestBody = RequestBodyLBS $ encode data_
                    , requestHeaders = requestHeaders req

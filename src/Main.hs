@@ -117,14 +117,14 @@ handleAction "serve" rs = do
     (RunState st db _ _ _ _ _ fv av uv accv cfg) <- readMVar rs
 
     info $ "Listening on port " ++ show port
-    app_ <- app st db fv uv accv
+    app_ <- app st db fv uv accv cfg
     hwid <- httpWorker app_
 
     info "Starting a timeoutWorker"
     twid <- timeoutWorker db av
 
     info "Starting an updateWorker"
-    uwid <- updateWorker db fv uv
+    uwid <- updateWorker db fv uv cfg
 
     info "Starting a streamWorker"
     swid <- streamWorker db fv
@@ -148,7 +148,7 @@ handleAction "cli" rs = do
     twid <- timeoutWorker db av
 
     info "Starting an updateWorker"
-    uwid <- updateWorker db fv uv
+    uwid <- updateWorker db fv uv cfg
 
     info "Updating feed"
     BLC.updateFeed uv
@@ -165,26 +165,16 @@ handleAction "cli" rs = do
 
 handleAction "dump" rs = do
     (RunState st db _ _ _ _ _ _ _ _ _ cfg) <- readMVar rs
-    (z, prevTime, rt) <- BLC.getStatus st db
+    (z, prevTime, rt) <- BLC.getStatus st db cfg
 
     putStrLn $ "Cfg dump:"
-    lkp cfg "oauthConsumerKey"
-    lkp cfg "oauthConsumerSecret"
-    lkp cfg "accessToken"
-    lkp cfg "accessTokenSecret"
-    lkp cfg "cloudDbUrl"
+    putStrLn $ show cfg
 
     putStrLn ""
     putStrLn "Store dump:"
     putStrLn $ "last seen id: " ++ show z
              ++ "\nPrev time: " ++ show prevTime
              ++ "\nRun time: " ++  show rt
-
-  where
-    lkp cfg i = do
-      v <- Data.Configurator.lookup cfg i :: IO (Maybe String)
-      putStrLn $ unpack i ++ ": " ++ show v
-
 
 handleAction _ _ = putStrLn usage
 
@@ -193,12 +183,26 @@ ctrlCHandler av = Catch $ do
     alert "Got Ctrl-C, sending exit cmd"
     putMVar av MExit
 
-withConfig :: FilePath -> (Config -> IO ()) -> IO ()
+withConfig :: FilePath -> (Cfg -> IO ()) -> IO ()
 withConfig name t = do
     mb <- E.try $ load [Required name]
     case mb of
         Left (err :: E.SomeException) -> putStrLn (show err)
-        Right cfg -> t cfg
+        Right cfg -> do
+          ck  <- lkp cfg "oauthConsumerKey"
+          cks <- lkp cfg "oauthConsumerSecret"
+          at  <- lkp cfg "accessToken"
+          ats <- lkp cfg "accessTokenSecret"
+          cdb <- lkp cfg "cloudDbUrl"
+
+          case Cfg <$> ck <*> cks <*> at <*> ats <*> cdb of
+            Nothing -> putStrLn "Bad config"
+            Just c  -> t c
+
+          where
+            lkp cfg i = do
+              v <- Data.Configurator.lookup cfg i :: IO (Maybe String)
+              return v
 
 main :: IO ()
 main = do

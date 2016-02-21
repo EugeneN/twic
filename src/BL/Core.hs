@@ -375,9 +375,9 @@ homeTimelineMaxidCount 0 count = HomeTimeline $
 homeTimelineMaxidCount tid count = HomeTimeline $
     "https://api.twitter.com/1.1/statuses/home_timeline.json?count=" ++ show count ++ "&max_id=" ++ show tid
 
-getUpdateFeedUrl :: DL.MyDb -> IO Feed
-getUpdateFeedUrl db = do
-  xs <- CDL.readCloudDb
+getUpdateFeedUrl :: DL.MyDb -> String -> IO Feed
+getUpdateFeedUrl db url = do
+  xs <- CDL.readCloudDb url
   info $ "Read from cloud db with result of length: " ++ show (length <$> xs)
 
   let z = case xs of
@@ -397,14 +397,14 @@ justTweetMessage :: FeedMessage -> Bool
 justTweetMessage (TweetMessage _) = True
 justTweetMessage _                = False
 
-saveLastSeenAsync :: DL.MyDb -> FeedState -> IO ThreadId
-saveLastSeenAsync db ts = forkIO $ saveLastSeen db ts >> return ()
+saveLastSeenAsync :: DL.MyDb -> FeedState -> Cfg -> IO ThreadId
+saveLastSeenAsync db ts cfg = forkIO $ saveLastSeen db ts cfg >> return ()
 
-saveLastSeen :: DL.MyDb -> FeedState -> IO (Either CDL.CloudDataLayerError CDL.WriteResponse)
-saveLastSeen _ ts | justTweets ts == [] = return $ Right $ CDL.WriteSuccess "write skipped"
-saveLastSeen db ts = do
+saveLastSeen :: DL.MyDb -> FeedState -> Cfg -> IO (Either CDL.CloudDataLayerError CDL.WriteResponse)
+saveLastSeen _ ts _ | justTweets ts == [] = return $ Right $ CDL.WriteSuccess "write skipped"
+saveLastSeen db ts cfg = do
     now <- getCurrentTime
-    res <- CDL.writeCloudDb $ CDL.CloudDbStoreItem (getMaxId $ justTweets ts) (show now) -- now
+    res <- CDL.writeCloudDb (CDL.CloudDbStoreItem (getMaxId $ justTweets ts) (show now)) cfg -- now
     info $ "Wrote to cloud db with result: " ++ show res
     return res
 
@@ -484,10 +484,10 @@ updateFeed uv = do
     _ <- forkIO $ putMVar uv now -- avoid blocking caller
     return ()
 
-updateFeedSync :: DL.MyDb -> MVar FeedState -> IO ()
-updateFeedSync db fv = do
+updateFeedSync :: DL.MyDb -> MVar FeedState -> Cfg -> IO ()
+updateFeedSync db fv cfg = do
     info "Updating feed"
-    feedUrl <- getUpdateFeedUrl db
+    feedUrl <- getUpdateFeedUrl db (cfgCloudDbUrl cfg)
     doreq feedUrl db fv (0 :: Int)
 
   where
@@ -603,9 +603,9 @@ getRunTime st = do
     return $ diffUTCTime endTime st
 
 -- TODO type aliases and type for status
-getStatus :: UTCTime -> DL.MyDb -> IO (TweetId, UTCTime, NominalDiffTime)
-getStatus st db = do
-    xs <- CDL.readCloudDb
+getStatus :: UTCTime -> DL.MyDb -> Cfg -> IO (TweetId, UTCTime, NominalDiffTime)
+getStatus st db cfg = do
+    xs <- CDL.readCloudDb (cfgCloudDbUrl cfg)
     (_, prevTime) <- DL.getPrevState db
     rt <- getRunTime st
 

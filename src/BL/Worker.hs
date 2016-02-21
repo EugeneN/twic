@@ -32,7 +32,7 @@ import qualified BL.Core                   as BLC
 import           BL.DataLayer              (MyDb, getPrevState, writeTime)
 import           BL.Types
 import qualified Config                    as CFG
-import           Prelude                   hiding (error)
+import           Prelude                   hiding (error, lookup)
 import           System.Log.Handler.Simple
 import           System.Log.Logger
 import qualified Web.Twitter.Types         as TT
@@ -80,12 +80,12 @@ accountFetchWorker accv fv = forkIO $ forever $ do
     debug $ "Got fetch account request at " ++ show fetchreq
     BLC.fetchContext fv
 
-updateWorker :: MyDb -> MVar FeedState -> MVar UpdateMessage -> IO ThreadId
-updateWorker db fv uv = forkIO $ forever $ do
+updateWorker :: MyDb -> MVar FeedState -> MVar UpdateMessage -> Cfg -> IO ThreadId
+updateWorker db fv uv cfg = forkIO $ forever $ do
     ur <- takeMVar uv
     debug $ "***Got an update request at " ++ show ur
     -- TODO throttle update requests here
-    BLC.updateFeedSync db fv
+    BLC.updateFeedSync db fv cfg
 
 streamWorker :: MyDb -> MVar FeedState -> IO ThreadId
 streamWorker db m = forkIO $

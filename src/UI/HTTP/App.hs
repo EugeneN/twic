@@ -16,7 +16,7 @@ import           BL.Core                             (fetchContext, followUser,
                                                       writeApi)
 import           BL.DataLayer                        (MyDb)
 import           BL.Types                            (FeedState, Message (..),
-                                                      ScreenName, Tweet,
+                                                      ScreenName, Tweet, Cfg,
                                                       TweetBody, TweetId,
                                                       UpdateMessage)
 import           Blaze.ByteString.Builder            (Builder, fromByteString)
@@ -102,8 +102,8 @@ embeddedHandler mime resourse request response =
   bstr = BSL.fromStrict resourse
 
 
-httpapp :: UTCTime -> MyDb -> Application -- = Request -> ResourceT IO Response
-httpapp st db request sendResponse = do
+httpapp :: UTCTime -> MyDb -> Cfg -> Application -- = Request -> ResourceT IO Response
+httpapp st db cfg request sendResponse = do
   debug $ show $ pathInfo request
   print resMainjs
   case pathInfo request of
@@ -122,17 +122,17 @@ httpapp st db request sendResponse = do
 -- #endif
 
     path -> case Prelude.head path of
-      "retweet"  -> retweetHandler      request sendResponse
-      "star"     -> starHandler         request sendResponse
-      "tweet"    -> tweetHandler        request sendResponse
-      "reply"    -> replyHandler        request sendResponse
-      "stat"     -> statHandler st db   request sendResponse
-      "history"  -> historyHandler      request sendResponse
-      "userfeed" -> userfeedHandler     request sendResponse
-      "userinfo" -> userinfoHandler     request sendResponse
-      "follow"   -> followHandler True  request sendResponse
-      "unfollow" -> followHandler False request sendResponse
-      _          -> notFoundHandler     request sendResponse
+      "retweet"  -> retweetHandler        request sendResponse
+      "star"     -> starHandler           request sendResponse
+      "tweet"    -> tweetHandler          request sendResponse
+      "reply"    -> replyHandler          request sendResponse
+      "stat"     -> statHandler st db cfg request sendResponse
+      "history"  -> historyHandler        request sendResponse
+      "userfeed" -> userfeedHandler       request sendResponse
+      "userinfo" -> userinfoHandler       request sendResponse
+      "follow"   -> followHandler True    request sendResponse
+      "unfollow" -> followHandler False   request sendResponse
+      _          -> notFoundHandler       request sendResponse
 
 makeClient :: UUID -> WS.Connection -> Client
 makeClient a c = (a, c)
@@ -143,26 +143,26 @@ addClient client clients = client : clients
 removeClient :: Client -> WSState -> WSState
 removeClient client = Prelude.filter ((/= fst client) . fst)
 
-sendToClients :: MyDb -> MVar [Client] -> FeedState -> IO ()
-sendToClients db cs ts = do
+sendToClients :: MyDb -> MVar [Client] -> FeedState -> Cfg -> IO ()
+sendToClients db cs ts cfg = do
     clients <- readMVar cs
     case clients of
         [] -> info "No clients available"
         _ -> do
-            saveLastSeenAsync db ts
+            saveLastSeenAsync db ts cfg
             broadcast (encode ts) clients
 
 broadcast :: BSL.ByteString -> WSState -> IO ()
 broadcast msg clients = forM_ clients $ \(_, conn) -> WS.sendTextData conn msg
 
-app :: UTCTime -> MyDb -> MVar FeedState -> MVar UpdateMessage -> MVar UpdateMessage
+app :: UTCTime -> MyDb -> MVar FeedState -> MVar UpdateMessage -> MVar UpdateMessage -> Cfg
     -> IO Application
-app st db fv uv accv = do
+app st db fv uv accv cfg = do
     cs <- newMVar ([] :: WSState)
-    _ <- startBroadcastWorker db fv cs
+    _ <- startBroadcastWorker db fv cs cfg
     return $ WaiWS.websocketsOr WS.defaultConnectionOptions
                                 (wsapp db fv uv accv cs)
-                                (httpapp st db)
+                                (httpapp st db cfg)
 
 wsapp :: MyDb -> MVar FeedState -> MVar UpdateMessage -> MVar UpdateMessage -> MVar WSState
       -> WS.ServerApp
@@ -179,11 +179,11 @@ wsapp db fv uv accv cs pending = do
   updateFeed uv
   trackConnection client cs
 
-startBroadcastWorker :: MyDb -> MVar FeedState -> MVar WSState -> IO ThreadId
-startBroadcastWorker db fv cs = forkIO $
+startBroadcastWorker :: MyDb -> MVar FeedState -> MVar WSState -> Cfg -> IO ThreadId
+startBroadcastWorker db fv cs cfg = forkIO $
     forever $ do
         ts <- takeMVar fv
-        sendToClients db cs ts
+        sendToClients db cs ts cfg
 
 trackConnection :: Client -> MVar WSState -> IO ()
 trackConnection client@(clientId, clientConn) cs = handle catchDisconnect $
@@ -350,10 +350,10 @@ replyHandler request response = case queryString request of
         replyStream status reply_to_id send flush =
             writeApi (replyUrl status reply_to_id) >>= send . tweetToJson >> flush
 
-statHandler :: UTCTime -> MyDb -> Application
-statHandler st db request response = response $ responseStream status200 [mimeText] (respStream st db)
+statHandler :: UTCTime -> MyDb -> Cfg -> Application
+statHandler st db cfg request response = response $ responseStream status200 [mimeText] (respStream st db)
     where
     respStream :: UTCTime -> MyDb -> (Builder -> IO ()) -> IO () -> IO ()
     respStream st db send flush = do
         send (fromByteString "hello\n") >> flush
-        getStatus st db >>=  send . fromByteString . B8.pack . show >> flush
+        getStatus st db cfg >>=  send . fromByteString . B8.pack . show >> flush
