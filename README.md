@@ -38,7 +38,7 @@ Twic has also a more advanced features - posting new tweets, retweeting, starrin
 
 # Run
 
-### *I don't want to compile anything, let me just download and run it* 
+### *I don't want to compile anything, let me just download and run it:*
 
 See [https://github.com/EugeneN/twic/wiki/Quick-start](https://github.com/EugeneN/twic/wiki/Quick-start)
 
@@ -51,7 +51,6 @@ Run this in a shell:
 ```
 $ git clone https://github.com/EugeneN/twic.git
 $ cd twic
-
 $ cd src/UI/HTTP/cs && npm install && bower install && grunt && cd -
 $ stack install
 ```
@@ -70,13 +69,13 @@ Provide your auth details using this instrunction: [https://github.com/EugeneN/t
 Run:
 
 ```
-$ stack run twic serve 
+$ stack run twic serve
 ```
 
 or, if built with cabal:
 
 ```
-$ ./dist/build/twic/twic serve 
+$ ./dist/build/twic/twic serve
 ```
 
 Go to [http://localhost:3000/](http://localhost:3000/)
