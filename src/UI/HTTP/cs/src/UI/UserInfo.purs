@@ -147,15 +147,18 @@ unfollowButton state user = do
 avatarUrl src = stringReplace src "_normal." "_400x400."
 
 instance asHtmlUser :: AsHtml User where
-    asHtml s (User u) = D.ul [ P.style { "display": "block"
-                                       , "width": "600px"
-                                       , "text-align": "left"
-                                       , "margin": "auto"
-                                       , "overflow": "hidden"
-                                       , "padding": "20px"
-                                       --, "color": "#" ++ u.userProfileTextColor
-                                       , "background-color": "rgba(0,0,0,0.3)"
-                                       , "height": "420px" } ]
+    asHtml s (User u) =
+      D.ul
+        [ P.style { "display": "block"
+                  , "width": "600px"
+                  , "text-align": "left"
+                  , "margin": "auto"
+                  , "overflow": "hidden"
+                  , "padding": "20px"
+                  --, "color": "#" ++ u.userProfileTextColor
+                  , "background-color": "rgba(0,0,0,0.3)"
+                  , "height": "420px" } ]
+
         [ D.li [ P.style { "margin": "0px"
                           , "padding": "5px"
                           , "padding-top": "0px"

@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE FlexibleContexts  #-}
 
 module BL.Core (
     Url
@@ -614,4 +615,3 @@ getStatus st db = do
               Right y  -> CDL.lastSeenId (maximum y)
 
     return (z, prevTime, rt)
-

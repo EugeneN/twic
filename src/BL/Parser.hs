@@ -1,5 +1,6 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE FlexibleContexts          #-}
 
 module BL.Parser (parseTweet) where
 

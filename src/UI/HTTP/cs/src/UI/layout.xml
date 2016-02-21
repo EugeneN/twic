@@ -1,0 +1,49 @@
+<window>
+
+  <!--
+
+  +---------------------------------------+
+  |                  top                  |
+  +---------------------------------------+
+  |        |                      |       |
+  |        |                      |       |
+  | left   |     center           | right |
+  |        |             +-----------+    |
+  |        |             |           |    |
+  +----------------------|   float   |----+
+  |             bottom   +-----------+    |
+  +---------------------------------------+
+
+  -->
+
+  <layout>
+
+    <top>
+      <messages/>
+    </top>
+
+    <left/>
+    <rignt/>
+    <bottom/>
+
+    <center>
+      <vertical-stack>
+
+        <history-button/>
+        <feed/>
+        <update-button/>
+
+      </vertical-stack>
+    </center>
+
+    <floating>
+
+      <write-dialog/>
+      <reply-qialog/>
+      <info-dialog/>
+
+    </floating>
+
+  </layout>
+
+</window>

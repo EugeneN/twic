@@ -232,6 +232,7 @@ bodyCss = do
   ".inline-img" ? do
     marginLeft (px 50)
     marginTop (px 15)
+    maxWidth (px 600)
 
   ".unknown-media" ? do
     padding (px 20) (px 20) (px 20) (px 20)

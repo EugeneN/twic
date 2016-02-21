@@ -130,7 +130,7 @@ listenWriteKeys state = do
 
 
 writeInputComponent :: ComponentClass { state :: REFVal State } {}
-writeInputComponent = mkUI $ spec {} 	his -> do
+writeInputComponent = mkUI $ spec {} \this -> do
     where
     renderFun this = do
       State { writeInput = (WriteInput { visible  = visible

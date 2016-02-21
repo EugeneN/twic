@@ -1,16 +1,20 @@
-flags: {}
 
 packages:
 - '.'
 
+flags:
+  twitter-types:
+    time15: true
+
 extra-deps:
 - aeson-lens-0.5.0.0
-- twitter-conduit-0.1.0
-- twitter-types-0.7.0
-- twitter-types-lens-0.7.0
+- twitter-conduit-0.1.1.1
+- twitter-types-0.7.1.1
+- twitter-types-lens-0.7.1
 - wai-dispatch-0.1
-- yesod-routes-1.2.0.7
-- acid-state-0.12.4
 - path-pieces-0.1.5
-    
-resolver: lts-2.9
+- yesod-routes-1.2.0.7
+- contravariant-1.2.0.1
+- cabal-helper-0.6.2.0
+
+resolver: lts-3.5

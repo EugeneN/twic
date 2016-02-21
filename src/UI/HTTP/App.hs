@@ -1,16 +1,19 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE TemplateHaskell   #-}
 
 module UI.HTTP.App where
 
-import           BL.Core                             (getStatus, readHistory,
-                                                      readUserInfo, followUser, unfollowUser,
+import           BL.Core                             (fetchContext, followUser,
+                                                      getStatus, readHistory,
+                                                      readUserInfo,
                                                       readUserstream, replyUrl,
                                                       retweetUrl, saveLastSeen,
-                                                      saveLastSeenAsync, sendFetchAccountRequest,
-                                                      starUrl, tweetUrl, fetchContext,
-                                                      updateFeed, writeApi)
+                                                      saveLastSeenAsync,
+                                                      sendFetchAccountRequest,
+                                                      starUrl, tweetUrl,
+                                                      unfollowUser, updateFeed,
+                                                      writeApi)
 import           BL.DataLayer                        (MyDb)
 import           BL.Types                            (FeedState, Message (..),
                                                       ScreenName, Tweet,
@@ -60,16 +63,17 @@ import           UI.HTTP.Json                        (justFeedMessagesToJson,
                                                       tweetToJson)
 
 import           Blaze.ByteString.Builder.ByteString (fromByteString)
+import           Data.FileEmbed                      (embedFile,
+                                                      embedStringFile)
 import           Data.Time.Clock                     (UTCTime (..))
-import           Data.FileEmbed                      (embedFile)
 
 
 logRealm = "HttpApp"
 
-info = infoM logRealm
-warn = warningM logRealm
-debug = debugM logRealm
-error = errorM logRealm
+info     = infoM logRealm
+warn     = warningM logRealm
+debug    = debugM logRealm
+error    = errorM logRealm
 
 type Filename  = String
 type Client    = (UUID, WS.Connection)
@@ -101,33 +105,34 @@ embeddedHandler mime resourse request response =
 httpapp :: UTCTime -> MyDb -> Application -- = Request -> ResourceT IO Response
 httpapp st db request sendResponse = do
   debug $ show $ pathInfo request
+  print resMainjs
   case pathInfo request of
     []                  -> homeHandler request sendResponse
 
-#ifdef XStaticResources
-    ["cs", "Main.js"]    -> embeddedHandler [mimeJs] resMainjs request sendResponse
-    ["favicon.ico"]      -> embeddedHandler [mimeIco] resFavicon request sendResponse
-    ["snake-loader.gif"] -> embeddedHandler [mimeGif] resLoader request sendResponse
+-- #ifdef XStaticResources
+    ["cs", "Main.js"]           -> embeddedHandler [mimeJs]  resMainjs     request sendResponse
+    ["favicon.ico"]             -> embeddedHandler [mimeIco] resFavicon    request sendResponse
+    ["snake-loader.gif"]        -> embeddedHandler [mimeGif] resLoader     request sendResponse
     ["snake-loader-darkbg.gif"] -> embeddedHandler [mimeGif] resLoaderDark request sendResponse
-#else
-    ["cs", "Main.js"]   -> staticHandler [mimeJs] "src/UI/HTTP/cs/res/Main.js" request sendResponse
-    ["favicon.ico"]     -> staticHandler [mimeIco] "src/UI/HTTP/cs/res/favicon.ico" request sendResponse
-    ["snake-loader.gif"] -> staticHandler [mimeGif] "src/UI/HTTP/cs/res/snake-loader.gif" request sendResponse
-    ["snake-loader-darkbg.gif"] -> staticHandler [mimeGif] "src/UI/HTTP/cs/res/snake-loader-darkbg.gif" request sendResponse
-#endif
+-- #else
+--     ["cs", "Main.js"]           -> staticHandler [mimeJs] "src/UI/HTTP/cs/res/Main.js" request sendResponse
+--     ["favicon.ico"]             -> staticHandler [mimeIco] "src/UI/HTTP/cs/res/favicon.ico" request sendResponse
+--     ["snake-loader.gif"]        -> staticHandler [mimeGif] "src/UI/HTTP/cs/res/snake-loader.gif" request sendResponse
+--     ["snake-loader-darkbg.gif"] -> staticHandler [mimeGif] "src/UI/HTTP/cs/res/snake-loader-darkbg.gif" request sendResponse
+-- #endif
 
-    path                -> case Prelude.head path of
-        "retweet"       -> retweetHandler request sendResponse
-        "star"          -> starHandler request sendResponse
-        "tweet"         -> tweetHandler request sendResponse
-        "reply"         -> replyHandler request sendResponse
-        "stat"          -> statHandler st db request sendResponse
-        "history"       -> historyHandler request sendResponse
-        "userfeed"      -> userfeedHandler request sendResponse
-        "userinfo"      -> userinfoHandler request sendResponse
-        "follow"        -> followHandler True request sendResponse
-        "unfollow"      -> followHandler False request sendResponse
-        _               -> notFoundHandler request sendResponse
+    path -> case Prelude.head path of
+      "retweet"  -> retweetHandler      request sendResponse
+      "star"     -> starHandler         request sendResponse
+      "tweet"    -> tweetHandler        request sendResponse
+      "reply"    -> replyHandler        request sendResponse
+      "stat"     -> statHandler st db   request sendResponse
+      "history"  -> historyHandler      request sendResponse
+      "userfeed" -> userfeedHandler     request sendResponse
+      "userinfo" -> userinfoHandler     request sendResponse
+      "follow"   -> followHandler True  request sendResponse
+      "unfollow" -> followHandler False request sendResponse
+      _          -> notFoundHandler     request sendResponse
 
 makeClient :: UUID -> WS.Connection -> Client
 makeClient a c = (a, c)
