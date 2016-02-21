@@ -1,18 +1,21 @@
 module Config where
 
-serverName = "api.twitter.com"
+serverName         = "api.twitter.com"
 
-oneSecond = 1000000 :: Int
-oneMinute = 60 * oneSecond
+userConfig         = "twic.cfg"
+logFile            = "twic.log"
 
-port = 3000 :: Int
-delay = 2 * oneMinute
+oneSecond          = 1000000 :: Int
+oneMinute          = 60 * oneSecond
 
-heartbeatDelay = 15 :: Int -- seconds
+port               = 3000 :: Int
+delay              = 2 * oneMinute
 
-timeoutThreshod = 90
+heartbeatDelay     = 15 :: Int -- seconds
+
+timeoutThreshod    = 90
 timeoutWorkerDelay = (timeoutThreshod * oneSecond) - oneSecond
 
-updateRetryCount = 30 :: Int
-updateRetryDelay = 2 * oneSecond
-updateFeedAsync = False
+updateRetryCount   = 30 :: Int
+updateRetryDelay   = 2 * oneSecond
+updateFeedAsync    = False

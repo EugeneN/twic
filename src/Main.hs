@@ -10,7 +10,7 @@ import           BL.DataLayer              (MyDb, getPrevState, openDb)
 import           BL.Types
 import           BL.Worker                 (accountFetchWorker, streamWorker,
                                             timeoutWorker, updateWorker)
-import           Config                    (port)
+import           Config                    (port, userConfig, logFile)
 
 import           Network.Wai
 import           Network.Wai.Handler.Warp  (run)
@@ -58,6 +58,18 @@ alert = alertM logRealm
 
 usage :: String
 usage = "Usage: <me> serve | cli | dump"
+
+confUsage :: String
+confUsage = "\nExpecting `" ++ userConfig ++ "` config file with Twitter OAuth settings.\n"
+         ++ "See https://github.com/EugeneN/twic/wiki/Quick-start#how-to-configure-and-run-twic\n"
+
+logUsage :: String
+logUsage = "\nExpecting `" ++ logFile ++ "` log file.\n"
+        ++ "See https://github.com/EugeneN/twic/wiki/Quick-start#how-to-configure-and-run-twic\n"
+
+badConf :: String
+badConf = "\nBad or uncomplete `" ++ userConfig ++ "` config file.\n"
+       ++ "See https://github.com/EugeneN/twic/wiki/Quick-start#how-to-configure-and-run-twic\n"
 
 
 httpWorker :: Application -> IO ThreadId
@@ -134,7 +146,7 @@ handleAction "serve" rs = do
 
     _ <- swapMVar rs (RunState st db (Just twid) (Just swid) (Just hwid) (Just uwid) (Just acwid) fv av uv accv cfg)
 
-    rc <- system "open http://localhost:3000"
+    rc <- system $ "open http://localhost:" ++ show port
 
     runManager rs
 
@@ -187,7 +199,8 @@ withConfig :: FilePath -> (Cfg -> IO ()) -> IO ()
 withConfig name t = do
     mb <- E.try $ load [Required name]
     case mb of
-        Left (err :: E.SomeException) -> putStrLn (show err)
+        Left (err :: E.SomeException) -> putStrLn ("Error: " ++ show err) >> putStrLn confUsage
+
         Right cfg -> do
           ck  <- lkp cfg "oauthConsumerKey"
           cks <- lkp cfg "oauthConsumerSecret"
@@ -196,7 +209,7 @@ withConfig name t = do
           cdb <- lkp cfg "cloudDbUrl"
 
           case Cfg <$> ck <*> cks <*> at <*> ats <*> cdb of
-            Nothing -> putStrLn "Bad config"
+            Nothing -> putStrLn badConf
             Just c  -> t c
 
           where
@@ -208,13 +221,16 @@ main :: IO ()
 main = do
   updateGlobalLogger rootLoggerName (setLevel DEBUG)
 
-  h <- fileHandler "twic.log" DEBUG >>= \lh -> return $
+  h <- E.try $ fileHandler logFile DEBUG >>= \lh -> return $
     setFormatter lh (simpleLogFormatter "[$time : $loggername : $prio] $msg")
-  updateGlobalLogger rootLoggerName (addHandler h)
+
+  case h of
+    Left (err :: E.SomeException) -> putStrLn ("Error: " ++ show err) >> putStrLn logUsage
+    Right h'                      -> updateGlobalLogger rootLoggerName (addHandler h')
 
   args <- parseArgs
   case args of
-      Just (Args action) -> withConfig "twic.cfg" $ \cfg -> do
+      Just (Args action) -> withConfig userConfig $ \cfg -> do
           db       <- openDb
           fv       <- newMVar ([] :: FeedState)
           av       <- newEmptyMVar
