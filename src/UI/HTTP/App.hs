@@ -122,17 +122,17 @@ httpapp st db cfg request sendResponse = do
 -- #endif
 
     path -> case Prelude.head path of
-      "retweet"  -> retweetHandler        request sendResponse
-      "star"     -> starHandler           request sendResponse
-      "tweet"    -> tweetHandler          request sendResponse
-      "reply"    -> replyHandler          request sendResponse
-      "stat"     -> statHandler st db cfg request sendResponse
-      "history"  -> historyHandler        request sendResponse
-      "userfeed" -> userfeedHandler       request sendResponse
-      "userinfo" -> userinfoHandler       request sendResponse
-      "follow"   -> followHandler True    request sendResponse
-      "unfollow" -> followHandler False   request sendResponse
-      _          -> notFoundHandler       request sendResponse
+      "retweet"  -> retweetHandler      cfg request sendResponse
+      "star"     -> starHandler         cfg request sendResponse
+      "tweet"    -> tweetHandler        cfg request sendResponse
+      "reply"    -> replyHandler        cfg request sendResponse
+      "stat"     -> statHandler st db   cfg request sendResponse
+      "history"  -> historyHandler      cfg request sendResponse
+      "userfeed" -> userfeedHandler     cfg request sendResponse
+      "userinfo" -> userinfoHandler     cfg request sendResponse
+      "follow"   -> followHandler True  cfg request sendResponse
+      "unfollow" -> followHandler False cfg request sendResponse
+      _          -> notFoundHandler         request sendResponse
 
 makeClient :: UUID -> WS.Connection -> Client
 makeClient a c = (a, c)
@@ -230,8 +230,8 @@ staticHandler mime fn request response = response $ responseFile status200 mime 
 notFoundHandler :: Application
 notFoundHandler request response = response $ responseLBS status200 [mimeText] "Unknown path"
 
-retweetHandler :: Application
-retweetHandler request response = case queryString request of
+retweetHandler :: Cfg -> Application
+retweetHandler cfg request response = case queryString request of
     [("id", Just id_)] -> case B8.readInteger id_ of
           Just (int, str) -> do
             debug $ "got retweet " ++ show id_
@@ -246,11 +246,11 @@ retweetHandler request response = case queryString request of
     where
         retweetStream :: TweetId -> (Builder -> IO ()) -> IO () -> IO ()
         retweetStream id_ send flush =
-            writeApi (retweetUrl id_) >>= send . retweetToJson >> flush
+            writeApi (retweetUrl id_) cfg >>= send . retweetToJson >> flush
 
 
-starHandler :: Application
-starHandler request response = case queryString request of
+starHandler :: Cfg -> Application
+starHandler cfg request response = case queryString request of
     [("id", Just id_)] -> case B8.readInteger id_ of
           Just (int, str) -> do
             debug $ "got star " ++ show id_
@@ -265,10 +265,10 @@ starHandler request response = case queryString request of
     where
         starStream :: TweetId -> (Builder -> IO ()) -> IO () -> IO ()
         starStream id_ send flush =
-            writeApi (starUrl id_) >>= send . starToJson >> flush
+            writeApi (starUrl id_) cfg >>= send . starToJson >> flush
 
-historyHandler :: Application
-historyHandler request response = case queryString request of
+historyHandler :: Cfg -> Application
+historyHandler cfg request response = case queryString request of
     [("maxid", Just id_), ("count", Just count)] -> case B8.readInteger id_ of
           Just (int_id, str) -> do
             debug $ "got history request with maxid " ++ show int_id ++ " and count " ++ show count
@@ -283,10 +283,10 @@ historyHandler request response = case queryString request of
     where
         historyStream :: TweetId -> (Builder -> IO ()) -> IO () -> IO ()
         historyStream id_ send flush =
-            readHistory id_ 20 >>= send . justFeedMessagesToJson >> flush
+            readHistory id_ 20 cfg >>= send . justFeedMessagesToJson >> flush
 
-userfeedHandler :: Application
-userfeedHandler request response = case queryString request of
+userfeedHandler :: Cfg -> Application
+userfeedHandler cfg request response = case queryString request of
     [("sn", Just screenName)] ->
         response $ responseStream status200 [mimeJSON] (userfeedStream (decodeUtf8 screenName))
 
@@ -295,22 +295,22 @@ userfeedHandler request response = case queryString request of
     where
         userfeedStream :: ScreenName -> (Builder -> IO ()) -> IO () -> IO ()
         userfeedStream sn send flush =
-            readUserstream sn 200 >>= send . justFeedMessagesToJson >> flush
+            readUserstream sn 200 cfg >>= send . justFeedMessagesToJson >> flush
 
-userinfoHandler :: Application
-userinfoHandler request response = case queryString request of
+userinfoHandler :: Cfg -> Application
+userinfoHandler cfg request response = case queryString request of
     [("sn", Just screenName)] ->
-        response $ responseStream status200 [mimeJSON] (userinfoStream (decodeUtf8 screenName))
+        response $ responseStream status200 [mimeJSON] (userinfoStream (decodeUtf8 screenName) cfg)
 
     _ -> response $ responseLBS status200 [mimeJSON] "bad request"
 
     where
-        userinfoStream :: ScreenName -> (Builder -> IO ()) -> IO () -> IO ()
-        userinfoStream sn send flush =
-            readUserInfo (T.unpack sn) >>= send . justUserToJson >> flush
+        userinfoStream :: ScreenName -> Cfg -> (Builder -> IO ()) -> IO () -> IO ()
+        userinfoStream sn cfg send flush =
+            readUserInfo (T.unpack sn) cfg >>= send . justUserToJson >> flush
 
-followHandler :: Bool -> Application
-followHandler follow request response = case queryString request of
+followHandler :: Bool -> Cfg -> Application
+followHandler follow cfg request response = case queryString request of
     [("sn", Just screenName)] ->
         response $ responseStream status200 [mimeJSON] (followStream (decodeUtf8 screenName))
 
@@ -319,11 +319,11 @@ followHandler follow request response = case queryString request of
     where
         followStream :: ScreenName -> (Builder -> IO ()) -> IO () -> IO ()
         followStream sn send flush = if follow
-            then followUser (T.unpack sn) >>= send . justUserToJson >> flush
-            else unfollowUser (T.unpack sn) >>= send . justUserToJson >> flush
+            then followUser (T.unpack sn) cfg >>= send . justUserToJson >> flush
+            else unfollowUser (T.unpack sn) cfg >>= send . justUserToJson >> flush
 
-tweetHandler :: Application
-tweetHandler request response = case queryString request of
+tweetHandler :: Cfg -> Application
+tweetHandler cfg request response = case queryString request of
     [("status", Just status)] -> do
         debug "got tweet "
         debug $ show status
@@ -334,10 +334,10 @@ tweetHandler request response = case queryString request of
     where
         tweetStream :: TweetBody -> (Builder -> IO ()) -> IO () -> IO ()
         tweetStream status send flush =
-            writeApi (tweetUrl status) >>= send . tweetToJson >> flush
+            writeApi (tweetUrl status) cfg >>= send . tweetToJson >> flush
 
-replyHandler :: Application
-replyHandler request response = case queryString request of
+replyHandler :: Cfg -> Application
+replyHandler cfg request response = case queryString request of
     [("status", Just status), ("reply_to", Just reply_to_id)] -> do
         debug "got reply"
         debug $ show status ++ " -> " ++ show reply_to_id
@@ -348,7 +348,7 @@ replyHandler request response = case queryString request of
     where
         replyStream :: TweetBody -> B8.ByteString -> (Builder -> IO ()) -> IO () -> IO ()
         replyStream status reply_to_id send flush =
-            writeApi (replyUrl status reply_to_id) >>= send . tweetToJson >> flush
+            writeApi (replyUrl status reply_to_id) cfg >>= send . tweetToJson >> flush
 
 statHandler :: UTCTime -> MyDb -> Cfg -> Application
 statHandler st db cfg request response = response $ responseStream status200 [mimeText] (respStream st db)

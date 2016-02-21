@@ -103,7 +103,7 @@ runManager = monitorAppBus
                 info "done"
 
                 info "Starting new stream worker... "
-                newWorkerId <- streamWorker db fv
+                newWorkerId <- streamWorker db fv cfg
                 info "done"
 
                 _ <- swapMVar rs (RunState st db twi (Just newWorkerId) hwi uvi afwi fv av uv accv cfg)
@@ -127,10 +127,10 @@ handleAction "serve" rs = do
     uwid <- updateWorker db fv uv cfg
 
     info "Starting a streamWorker"
-    swid <- streamWorker db fv
+    swid <- streamWorker db fv cfg
 
     info "Starting an account fetch worker"
-    acwid <- accountFetchWorker accv fv
+    acwid <- accountFetchWorker accv fv cfg
 
     _ <- swapMVar rs (RunState st db (Just twid) (Just swid) (Just hwid) (Just uwid) (Just acwid) fv av uv accv cfg)
 
@@ -154,10 +154,10 @@ handleAction "cli" rs = do
     BLC.updateFeed uv
 
     info "Starting a streamWorker"
-    swid <- streamWorker db fv
+    swid <- streamWorker db fv cfg
 
     info "Starting an account fetch worker"
-    acwid <- accountFetchWorker accv fv
+    acwid <- accountFetchWorker accv fv cfg
 
     _ <- swapMVar rs (RunState st db (Just twid) (Just swid) (Just cwid) (Just uwid) (Just acwid) fv av uv accv cfg)
 

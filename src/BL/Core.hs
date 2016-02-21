@@ -96,15 +96,15 @@ warn  = warningM logRealm
 debug = debugM   logRealm
 error = errorM   logRealm
 
-oauthToken :: OAuth
-oauthToken = twitterOAuth { oauthConsumerKey = BS.pack CFG.oauthConsumerKey
-                          , oauthConsumerSecret = BS.pack CFG.oauthConsumerSecret }
+oauthToken :: Cfg -> OAuth
+oauthToken cfg = twitterOAuth { oauthConsumerKey = BS.pack (cfgOauthConsumerKey cfg)
+                              , oauthConsumerSecret = BS.pack (cfgOauthConsumerSecret cfg) }
 
-oauthCredential :: Credential
-oauthCredential = newCredential (B8.pack CFG.accessToken) (B8.pack CFG.accessTokenSecret)
+oauthCredential :: Cfg -> Credential
+oauthCredential cfg = newCredential (B8.pack (cfgAccessToken cfg)) (B8.pack (cfgAccessTokenSecret cfg))
 
-twInfo :: TWInfo
-twInfo = setCredential oauthToken oauthCredential def
+twInfo :: Cfg -> TWInfo
+twInfo cfg = setCredential (oauthToken cfg) (oauthCredential cfg) def
 
 retweetStatusToTweet :: TT.RetweetedStatus -> Tweet
 retweetStatusToTweet s = Tweet { text               = parseTweet $ TT.rsText s
@@ -427,15 +427,15 @@ handleIncomingFeedMessages _ fv ts = do
     info $ "Got " ++ show (length ts) ++ " updated feed messages/s"
     putToClientQueue fv ts
 
-readUserstream :: ScreenName -> Int -> IO (Either (ApiError HttpException) FeedState)
-readUserstream sn count = do
+readUserstream :: ScreenName -> Int -> Cfg -> IO (Either (ApiError HttpException) FeedState)
+readUserstream sn count cfg = do
     info $ "reading userstream where ScreenName=" ++ show sn ++ " and count=" ++ show count
-    (_, res) <- readApi $ BL.Core.userTimeline (unpack sn) count
+    (_, res) <- readApi (BL.Core.userTimeline (unpack sn) count) cfg
     return ((TweetMessage <$>) <$> res)
 
 --readuserInfo :: ScreenName -> IO (Either (ApiError HttpException) UserInfo)
-readUserInfo sn = withManager $ \mgr -> do
-    res <- callWithResponse twInfo mgr $ usersShow (ScreenNameParam sn)
+readUserInfo sn cfg = withManager $ \mgr -> do
+    res <- callWithResponse (twInfo cfg) mgr $ usersShow (ScreenNameParam sn)
     case Web.Twitter.Conduit.responseStatus res of
         HTTP.Status {statusCode = 200, statusMessage = _ } ->
             return $ Right $ Web.Twitter.Conduit.responseBody res -- res :: User
@@ -447,15 +447,15 @@ readUserInfo sn = withManager $ \mgr -> do
 followUser sn   = followUnfollowUser sn (friendshipsCreate  (ScreenNameParam sn))
 unfollowUser sn = followUnfollowUser sn (friendshipsDestroy (ScreenNameParam sn))
 
-followUnfollowUser sn req = withManager $ \mgr -> do
-    res0 <- callWithResponse twInfo mgr req
+followUnfollowUser sn req cfg = withManager $ \mgr -> do
+    res0 <- callWithResponse (twInfo cfg) mgr req
     liftIO $ print $ Web.Twitter.Conduit.responseStatus res0
 
     case Web.Twitter.Conduit.responseStatus res0 of
         HTTP.Status {statusCode = 200, statusMessage = _ } -> do
             -- can't get rid of this 'cause on unfollow wtitter doesn't send unfollowed user info
             -- TODO handle errors
-            res <- call twInfo mgr $ usersShow (ScreenNameParam sn)
+            res <- call (twInfo cfg) mgr $ usersShow (ScreenNameParam sn)
             return $ Right res -- res :: MonadResource User
 
         HTTP.Status {statusCode=code, statusMessage=msg} ->
@@ -464,10 +464,10 @@ followUnfollowUser sn req = withManager $ \mgr -> do
 
 
 
-readHistory :: TweetId -> Int -> IO (Either (ApiError HttpException) FeedState)
-readHistory maxid count = do
+readHistory :: TweetId -> Int -> Cfg -> IO (Either (ApiError HttpException) FeedState)
+readHistory maxid count cfg = do
     info $ "reading history where maxid=" ++ show maxid ++ " and count=" ++ show count
-    (_, res) <- readApi $ homeTimelineMaxidCount maxid count
+    (_, res) <- readApi (homeTimelineMaxidCount maxid count) cfg
     return $ (TweetMessage <$>) <$> res
 
 sendFetchAccountRequest :: MVar UTCTime -> IO ()
@@ -492,7 +492,7 @@ updateFeedSync db fv cfg = do
 
   where
   doreq f db fv iter = do
-    (_, res) <- readApi f
+    (_, res) <- readApi f cfg
     case res of
       Right ts -> handleIncomingFeedMessages db fv (reverse $ TweetMessage <$> ts)
 
@@ -509,25 +509,25 @@ updateFeedSync db fv cfg = do
       Left (TransportError ex) -> error $ "error: transport error: " ++ show ex
       Left (ApiError msg)      -> error $ "error: api error: " ++ show msg
 
-fetchContext :: MVar FeedState -> IO ()
-fetchContext fv = do
-    res <- fetchSettings accountSettingsUrl
+fetchContext :: MVar FeedState -> Cfg -> IO ()
+fetchContext fv cfg = do
+    res <- fetchSettings accountSettingsUrl cfg
     case res of
         Left err -> putToClientQueue fv [ErrorMessage err]
         Right settings -> do
             putToClientQueue fv [SettingsMessage settings]
-            res' <- fetchFriends (accScreenName settings)
+            res' <- fetchFriends (accScreenName settings) cfg
             case res' of
                 Left err' -> putToClientQueue fv [ ErrorMessage err' ]
                 Right fs  -> putToClientQueue fv [ FriendsListMessage fs ]
 
     where
-    fetchSettings :: Url -> IO (Either JsonApiError TASettings)
-    fetchSettings url = do
+    fetchSettings :: Url -> Cfg -> IO (Either JsonApiError TASettings)
+    fetchSettings url cfg = do
         req <- parseUrl url
 
         res <- try $ withManager $ \m -> do
-                 signedreq <- signOAuth oauthToken oauthCredential req
+                 signedreq <- signOAuth (oauthToken cfg) (oauthCredential cfg) req
                  httpLbs signedreq m
 
         case res of
@@ -536,11 +536,11 @@ fetchContext fv = do
                 Left msg -> return $ Left $ JsonApiError "" $ pack msg
                 Right s  -> return $ Right s
 
-    fetchFriends :: ScreenName -> IO (Either JsonApiError [User])
-    fetchFriends sn = do
+    fetchFriends :: ScreenName -> Cfg -> IO (Either JsonApiError [User])
+    fetchFriends sn cfg = do
         -- TODO handle exceptions
         res <- withManager $ \mgr ->
-            sourceWithCursor twInfo mgr (friendsList (ScreenNameParam $ unpack sn)) $$ CL.consume
+            sourceWithCursor (twInfo cfg) mgr (friendsList (ScreenNameParam $ unpack sn)) $$ CL.consume
 
 
         return $ Right res
@@ -557,12 +557,12 @@ fetchContext fv = do
 --             HTTP.Status {statusCode=code, statusMessage=msg} ->
 --                 return $ Left $ JsonApiError "" (decodeUtf8 msg)
 
-writeApi :: Url -> IO (Either (ApiError HttpException) FeedMessage)
-writeApi url = do
+writeApi :: Url -> Cfg -> IO (Either (ApiError HttpException) FeedMessage)
+writeApi url cfg = do
     req <- parseUrl url
     let req' = req { method = "POST" }
     res <- try $ withManager $ \m -> do
-                 signedreq <- signOAuth oauthToken oauthCredential req'
+                 signedreq <- signOAuth (oauthToken cfg) (oauthCredential cfg) req'
                  httpLbs signedreq m
 
     case res of
@@ -575,11 +575,11 @@ writeApi url = do
             Left msg -> return $ Left $ ApiError msg
             Right t  -> return $ Right $ TweetMessage t
 
-readApi :: Feed -> IO (Feed, Either (ApiError HttpException) [Tweet])
-readApi feed = do
+readApi :: Feed -> Cfg -> IO (Feed, Either (ApiError HttpException) [Tweet])
+readApi feed cfg = do
   req <- parseUrl $ unfeedUrl feed
   res <- try $ withManager $ \m -> do
-             signedreq <- signOAuth oauthToken oauthCredential req
+             signedreq <- signOAuth (oauthToken cfg) (oauthCredential cfg) req
              httpLbs signedreq m
 
   case res of

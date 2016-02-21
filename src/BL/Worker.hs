@@ -74,11 +74,11 @@ timeoutWorker db ch = forkIO $ forever $ do
 
   sendUpdateMessage ch = putMVar ch MReloadFeed
 
-accountFetchWorker :: MVar UpdateMessage -> MVar FeedState -> IO ThreadId
-accountFetchWorker accv fv = forkIO $ forever $ do
+accountFetchWorker :: MVar UpdateMessage -> MVar FeedState -> Cfg -> IO ThreadId
+accountFetchWorker accv fv cfg = forkIO $ forever $ do
     fetchreq <- takeMVar accv
     debug $ "Got fetch account request at " ++ show fetchreq
-    BLC.fetchContext fv
+    BLC.fetchContext fv cfg
 
 updateWorker :: MyDb -> MVar FeedState -> MVar UpdateMessage -> Cfg -> IO ThreadId
 updateWorker db fv uv cfg = forkIO $ forever $ do
@@ -87,10 +87,10 @@ updateWorker db fv uv cfg = forkIO $ forever $ do
     -- TODO throttle update requests here
     BLC.updateFeedSync db fv cfg
 
-streamWorker :: MyDb -> MVar FeedState -> IO ThreadId
-streamWorker db m = forkIO $
+streamWorker :: MyDb -> MVar FeedState -> Cfg -> IO ThreadId
+streamWorker db m cfg = forkIO $
   withManager$ \mgr -> do
-    src <- stream BLC.twInfo mgr userstream
+    src <- stream (BLC.twInfo cfg) mgr userstream
     src C.$$+- CL.mapM_ (^! act (liftIO . handleTL))
 
   where
