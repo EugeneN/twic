@@ -91,10 +91,10 @@ import qualified Web.Twitter.Types              as TT
 
 logRealm = "Core"
 
-info = infoM logRealm
-warn = warningM logRealm
-debug = debugM logRealm
-error = errorM logRealm
+info  = infoM    logRealm
+warn  = warningM logRealm
+debug = debugM   logRealm
+error = errorM   logRealm
 
 oauthToken :: OAuth
 oauthToken = twitterOAuth { oauthConsumerKey = BS.pack CFG.oauthConsumerKey
@@ -444,7 +444,7 @@ readUserInfo sn = withManager $ \mgr -> do
             return $ Left $ ApiError $ "Twitter API returned bad status code: " ++ show code
                                                                          ++ " " ++ show msg
 
-followUser sn = followUnfollowUser sn (friendshipsCreate (ScreenNameParam sn))
+followUser sn   = followUnfollowUser sn (friendshipsCreate  (ScreenNameParam sn))
 unfollowUser sn = followUnfollowUser sn (friendshipsDestroy (ScreenNameParam sn))
 
 followUnfollowUser sn req = withManager $ \mgr -> do

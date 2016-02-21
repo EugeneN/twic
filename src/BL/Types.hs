@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module BL.Types where
 
@@ -9,6 +10,8 @@ import           Control.Concurrent     (MVar, ThreadId)
 import           Control.Exception.Base
 import           Control.Monad
 import           Data.Aeson
+import           Data.Configurator
+import           Data.Configurator.Types
 import           Data.ByteString
 import           Data.Int               (Int64)
 import           Data.Text              (Text)
@@ -53,8 +56,9 @@ instance Show (MVar UTCTime)
 makeAppState :: UTCTime -> a
              -> Maybe ThreadId -> Maybe ThreadId -> Maybe ThreadId -> Maybe ThreadId -> Maybe ThreadId
              -> MVar FeedState -> MVar IPCMessage -> MVar UpdateMessage -> MVar UpdateMessage
+             -> Config
              -> AppState a
-makeAppState a b c d e f g h j i k =
+makeAppState a b c d e f g h j i k l =
     RunState { startTime        = a
              , db               = b
              , timeoutWorkerId  = c
@@ -66,20 +70,24 @@ makeAppState a b c d e f g h j i k =
              , appBusVar        = j
              , updateVar        = i
              , fetchAccountVar  = k
+             , conf             = l
              }
 
-data AppState a = RunState { startTime       :: UTCTime
-                           , db              :: a
-                           , timeoutWorkerId :: Maybe ThreadId
-                           , streamWorkerId  :: Maybe ThreadId
-                           , uiWorkerId      :: Maybe ThreadId
-                           , updateWorkerId  :: Maybe ThreadId
+-- deriving instance Show Config
+
+data AppState a = RunState { startTime        :: UTCTime
+                           , db               :: a
+                           , timeoutWorkerId  :: Maybe ThreadId
+                           , streamWorkerId   :: Maybe ThreadId
+                           , uiWorkerId       :: Maybe ThreadId
+                           , updateWorkerId   :: Maybe ThreadId
                            , accFetchWorkerId :: Maybe ThreadId
-                           , feedVar         :: MVar [FeedMessage]
-                           , appBusVar       :: MVar IPCMessage
-                           , updateVar       :: MVar UpdateMessage
-                           , fetchAccountVar :: MVar UpdateMessage
-                           } deriving Show
+                           , feedVar          :: MVar [FeedMessage]
+                           , appBusVar        :: MVar IPCMessage
+                           , updateVar        :: MVar UpdateMessage
+                           , fetchAccountVar  :: MVar UpdateMessage
+                           , conf             :: Config
+                           } -- deriving Show
 
 data Feed = UserTimeline Url
           | HomeTimeline Url

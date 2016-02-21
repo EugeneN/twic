@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Main where
 
@@ -34,6 +35,10 @@ import qualified Control.Exception         as E
 import           Data.Time.Clock           (diffUTCTime, getCurrentTime)
 import           System.Exit
 
+import           Data.Configurator
+import           Data.Configurator.Types
+import           Data.Text                 (pack, unpack)
+
 -- # if defined(mingw32_HOST_OS)
 --import GHC.IO.IOMode
 -- import System.Win32.DebugApi (PHANDLE)
@@ -62,7 +67,7 @@ runManager :: forall b. MVar (AppState MyDb) -> IO b
 runManager = monitorAppBus
     where
     monitorAppBus rs = forever $ do
-        (RunState st _ _ _ _ _ _ _ av uv _) <- readMVar rs
+        (RunState st _ _ _ _ _ _ _ av uv _ _) <- readMVar rs
 
         cmd <- takeMVar av
         case cmd of
@@ -90,7 +95,7 @@ runManager = monitorAppBus
                 warn "Unknown command: " -- ++ show cmd
 
     restartStreamWorker rs = do
-        (RunState st db twi maybeSwi hwi uvi afwi fv av uv accv) <- readMVar rs
+        (RunState st db twi maybeSwi hwi uvi afwi fv av uv accv cfg) <- readMVar rs
         case maybeSwi of
             Just swi -> do
                 info "Killing old stream worker... "
@@ -101,7 +106,7 @@ runManager = monitorAppBus
                 newWorkerId <- streamWorker db fv
                 info "done"
 
-                _ <- swapMVar rs (RunState st db twi (Just newWorkerId) hwi uvi afwi fv av uv accv)
+                _ <- swapMVar rs (RunState st db twi (Just newWorkerId) hwi uvi afwi fv av uv accv cfg)
                 return ()
             Nothing -> warn "no swi"
 
@@ -109,7 +114,7 @@ runManager = monitorAppBus
 
 handleAction :: String -> MVar (AppState MyDb) -> IO ()
 handleAction "serve" rs = do
-    (RunState st db _ _ _ _ _ fv av uv accv) <- readMVar rs
+    (RunState st db _ _ _ _ _ fv av uv accv cfg) <- readMVar rs
 
     info $ "Listening on port " ++ show port
     app_ <- app st db fv uv accv
@@ -127,14 +132,14 @@ handleAction "serve" rs = do
     info "Starting an account fetch worker"
     acwid <- accountFetchWorker accv fv
 
-    _ <- swapMVar rs (RunState st db (Just twid) (Just swid) (Just hwid) (Just uwid) (Just acwid) fv av uv accv)
+    _ <- swapMVar rs (RunState st db (Just twid) (Just swid) (Just hwid) (Just uwid) (Just acwid) fv av uv accv cfg)
 
     rc <- system "open http://localhost:3000"
 
     runManager rs
 
 handleAction "cli" rs = do
-    (RunState st db _ _ _ _ _ fv av uv accv) <- readMVar rs
+    (RunState st db _ _ _ _ _ fv av uv accv cfg) <- readMVar rs
 
     info "Starting CLI client"
     cwid <- cliClientWorker fv
@@ -154,18 +159,32 @@ handleAction "cli" rs = do
     info "Starting an account fetch worker"
     acwid <- accountFetchWorker accv fv
 
-    _ <- swapMVar rs (RunState st db (Just twid) (Just swid) (Just cwid) (Just uwid) (Just acwid) fv av uv accv)
+    _ <- swapMVar rs (RunState st db (Just twid) (Just swid) (Just cwid) (Just uwid) (Just acwid) fv av uv accv cfg)
 
     runManager rs
 
 handleAction "dump" rs = do
-    (RunState st db _ _ _ _ _ _ _ _ _) <- readMVar rs
+    (RunState st db _ _ _ _ _ _ _ _ _ cfg) <- readMVar rs
     (z, prevTime, rt) <- BLC.getStatus st db
 
+    putStrLn $ "Cfg dump:"
+    lkp cfg "oauthConsumerKey"
+    lkp cfg "oauthConsumerSecret"
+    lkp cfg "accessToken"
+    lkp cfg "accessTokenSecret"
+    lkp cfg "cloudDbUrl"
+
+    putStrLn ""
     putStrLn "Store dump:"
     putStrLn $ "last seen id: " ++ show z
              ++ "\nPrev time: " ++ show prevTime
              ++ "\nRun time: " ++  show rt
+
+  where
+    lkp cfg i = do
+      v <- Data.Configurator.lookup cfg i :: IO (Maybe String)
+      putStrLn $ unpack i ++ ": " ++ show v
+
 
 handleAction _ _ = putStrLn usage
 
@@ -173,6 +192,13 @@ ctrlCHandler :: MVar IPCMessage -> Handler
 ctrlCHandler av = Catch $ do
     alert "Got Ctrl-C, sending exit cmd"
     putMVar av MExit
+
+withConfig :: FilePath -> (Config -> IO ()) -> IO ()
+withConfig name t = do
+    mb <- E.try $ load [Required name]
+    case mb of
+        Left (err :: E.SomeException) -> putStrLn (show err)
+        Right cfg -> t cfg
 
 main :: IO ()
 main = do
@@ -184,19 +210,18 @@ main = do
 
   args <- parseArgs
   case args of
-      Just (Args action) -> do
-          db <- openDb
-          fv <- newMVar ([] :: FeedState)
-          av <- newEmptyMVar
-          uv <- newEmptyMVar
-          accv <- newEmptyMVar
-          now <- getCurrentTime
+      Just (Args action) -> withConfig "twic.cfg" $ \cfg -> do
+          db       <- openDb
+          fv       <- newMVar ([] :: FeedState)
+          av       <- newEmptyMVar
+          uv       <- newEmptyMVar
+          accv     <- newEmptyMVar
+          now      <- getCurrentTime
 
-          runstate <- newMVar $ makeAppState now db Nothing Nothing Nothing Nothing Nothing fv av uv accv
+          runstate <- newMVar $ makeAppState now db Nothing Nothing Nothing Nothing Nothing fv av uv accv cfg
 
           installHandler keyboardSignal (ctrlCHandler av) Nothing
 
           handleAction action runstate
 
       Nothing -> putStrLn usage
-
