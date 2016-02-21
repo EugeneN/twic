@@ -14,6 +14,7 @@ SourceGraph/**
 
 .project
 twic.log
+twic.cfg
 
 
 .stack-work
