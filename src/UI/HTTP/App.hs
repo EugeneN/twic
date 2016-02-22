@@ -105,7 +105,6 @@ embeddedHandler mime resourse request response =
 httpapp :: UTCTime -> MyDb -> Cfg -> Application -- = Request -> ResourceT IO Response
 httpapp st db cfg request sendResponse = do
   debug $ show $ pathInfo request
-  print resMainjs
   case pathInfo request of
     []                  -> homeHandler request sendResponse
 
