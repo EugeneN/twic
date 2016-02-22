@@ -9,7 +9,7 @@ flags:
 ghc-options:
     # All packages
     #"*": -Wall
-    twic: -O2  -static -optc-static -optl-static  -fvia-C -optl-pthread
+    #twic: -O2  -static -optc-static -optl-static  -fvia-C -optl-pthread
 
 extra-deps:
 - aeson-lens-0.5.0.0
