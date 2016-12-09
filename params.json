@@ -1,0 +1,6 @@
+{
+  "name": "Twic",
+  "tagline": "A Twitter client without hassle written in Haskell and Purescript",
+  "body": "# README #\r\n\r\nTwic is a simple (in means of UI and UX) Twitter client. It's main goal is a search of a better Twitter feed usage experience.\r\n\r\nCompare with the original Twitter UI:\r\n\r\n<img src=\"https://raw.githubusercontent.com/EugeneN/twic/master/screenshot.png\" style=\"width: 600px;\"/>\r\n\r\nTwic has also a more advanced features - posting new tweets, retweeting, starring tweets, replying, history etc. Filtered feed views and conversation views are planned.\r\n\r\nRead more here: [https://github.com/EugeneN/twic/wiki/About](https://github.com/EugeneN/twic/wiki/About)\r\n\r\n# Run\r\n\r\n### *\"I don't want to compile anything, let me just download and run it\":*\r\n\r\nSee [https://github.com/EugeneN/twic/wiki/Quick-start](https://github.com/EugeneN/twic/wiki/Quick-start)\r\n\r\n\r\n### *\"My interests are more unconventional\":*\r\n\r\n\r\nTo build from source read this: [https://github.com/EugeneN/twic/wiki/Build-(slow-start)](https://github.com/EugeneN/twic/wiki/Build-(slow-start))\r\n\r\n\r\n# TODO\r\n\r\nA lot.\r\n",
+  "note": "Don't delete this file! It's used internally to help with page regeneration."
+}
